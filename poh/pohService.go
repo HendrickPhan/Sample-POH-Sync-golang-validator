@@ -15,18 +15,15 @@ import (
 	pb "example_poh.com/proto"
 )
 
-func (service *POHService) Run(
-	receiveleaderTickChan chan *pb.POHTick,
-	receiveVotedBlockChan chan *pb.POHBlock,
-	receiveVotesChan chan *pb.POHVote,
-) {
-	blockChan := make(chan *pb.POHBlock)
+func (service *POHService) Run() {
 	go func() {
-		blockChan <- service.Checkpoint
+		service.BlockChan <- service.Checkpoint
 	}()
 
 	for {
-		lastBlock := <-blockChan
+		fmt.Printf("RUN")
+
+		lastBlock := <-service.BlockChan
 		// add to recorder to update poh block history
 		fmt.Printf("Last block count: %v, type: %v\n", lastBlock.Count, lastBlock.Type)
 		service.Recorder.AddBlock(lastBlock)
@@ -36,19 +33,15 @@ func (service *POHService) Run(
 		// check from last block that this block will be leader
 		if service.isLeader(mainBranchLastBlock) {
 			fmt.Printf("Run as leader\n")
-			go service.RunAsLeader(mainBranchLastBlock, blockChan, receiveVotesChan)
+			go service.RunAsLeader(mainBranchLastBlock)
 		} else {
 			fmt.Printf("Run as validator\n")
-			go service.RunAsValidator(mainBranchLastBlock, blockChan, receiveVotedBlockChan, receiveleaderTickChan)
+			go service.RunAsValidator(mainBranchLastBlock)
 		}
 	}
 }
 
-func (service *POHService) RunAsLeader(
-	lastBlock *pb.POHBlock,
-	blockChan chan *pb.POHBlock,
-	receiveVotesChan chan *pb.POHVote,
-) {
+func (service *POHService) RunAsLeader(lastBlock *pb.POHBlock) {
 	exitChan := make(chan bool)
 	defer func() { // close all channel before exit
 		exitChan <- true
@@ -57,7 +50,7 @@ func (service *POHService) RunAsLeader(
 	virtualBlockChan := make(chan *pb.POHBlock)
 	leaderBlockChan := make(chan *pb.POHBlock)
 	go service.CreateVirtualBlock(lastBlock, virtualBlockChan)
-	go service.CreateLeaderBlock(lastBlock, receiveVotesChan, leaderBlockChan, exitChan)
+	go service.CreateLeaderBlock(lastBlock, leaderBlockChan, exitChan)
 	var virtualBlock *pb.POHBlock
 	var leaderBlock *pb.POHBlock
 	tickTime := 1000000000 / service.TickPerSecond
@@ -68,20 +61,20 @@ func (service *POHService) RunAsLeader(
 			virtualBlock = virtual
 		case leader := <-leaderBlockChan:
 			leaderBlock = leader
-			blockChan <- leaderBlock
+			service.BlockChan <- leaderBlock
 			return
 		default:
 		}
 
 		if time.Now().UnixNano() > timeOut { // which mean leader not send block in time so this node vote for virtual
 			fmt.Printf("Self is leader but Time out\n")
-			blockChan <- virtualBlock
+			service.BlockChan <- virtualBlock
 			return
 		}
 	}
 }
 
-func (service *POHService) RunAsValidator(lastBlock *pb.POHBlock, blockChan chan *pb.POHBlock, receiveVotedBlockChan chan *pb.POHBlock, receiveLeaderTickChan chan *pb.POHTick) {
+func (service *POHService) RunAsValidator(lastBlock *pb.POHBlock) {
 	exitChan := make(chan bool)
 	defer func() { // close all channel before exit
 		exitChan <- true
@@ -90,7 +83,7 @@ func (service *POHService) RunAsValidator(lastBlock *pb.POHBlock, blockChan chan
 	leaderBlockChan := make(chan *pb.POHBlock)
 
 	go service.CreateVirtualBlock(lastBlock, virtualBlockChan)
-	go service.HandleLeaderTick(lastBlock, receiveLeaderTickChan, receiveVotedBlockChan, leaderBlockChan, exitChan)
+	go service.HandleLeaderTick(lastBlock, leaderBlockChan, exitChan)
 	var virtualBlock *pb.POHBlock
 	tickTime := 1000000000 / service.TickPerSecond
 	timeOut := time.Now().UnixNano() + int64(tickTime*(service.TickPerSlot+service.TimeOutTicks))
@@ -99,14 +92,14 @@ func (service *POHService) RunAsValidator(lastBlock *pb.POHBlock, blockChan chan
 		case virtual := <-virtualBlockChan:
 			virtualBlock = virtual
 		case leaderBlock := <-leaderBlockChan:
-			blockChan <- leaderBlock
+			service.BlockChan <- leaderBlock
 			return
 		default:
 		}
 
 		if time.Now().UnixNano() > timeOut { // which mean leader not send block in time so this node vote for virtual
 			fmt.Printf("Current leader has Timeout, %v\n", virtualBlock.Count)
-			blockChan <- virtualBlock
+			service.BlockChan <- virtualBlock
 			return
 		}
 	}
@@ -199,7 +192,6 @@ func (service *POHService) createLeaderBlockWithSelfGenLastTick(lastBlock *pb.PO
 
 func (service *POHService) CreateLeaderBlock(
 	lastBlock *pb.POHBlock,
-	receiveVoteChan chan *pb.POHVote,
 	leaderBlockChan chan *pb.POHBlock,
 	exitChan chan bool,
 ) {
@@ -228,7 +220,7 @@ func (service *POHService) CreateLeaderBlock(
 			// gen leader block and collect vote from validator to
 			// gen last tick () with out taking any transaction because orther validator will do the same to create block
 			leaderBlock := service.createLeaderBlockWithSelfGenLastTick(lastBlock, ticks)
-			go service.HandleValidatorVotes(leaderBlock, receiveVoteChan, leaderBlockChan, exitChan)
+			go service.HandleValidatorVotes(leaderBlock, leaderBlockChan, exitChan)
 			return
 		}
 
@@ -238,8 +230,6 @@ func (service *POHService) CreateLeaderBlock(
 
 func (service *POHService) HandleLeaderTick(
 	lastBlock *pb.POHBlock,
-	receiveLeaderTickChannel chan *pb.POHTick,
-	receiveVotedBlockChan chan *pb.POHBlock,
 	leaderBlockChan chan *pb.POHBlock,
 	exitChan chan bool) {
 	// This function use to handle tick data from leader
@@ -247,7 +237,7 @@ func (service *POHService) HandleLeaderTick(
 	var ticks []*pb.POHTick
 	for totalTickGenerated < service.TickPerSlot-1 {
 		// append tick to create vote block
-		tick := <-receiveLeaderTickChannel
+		tick := <-service.ReceiveLeaderTickChan
 		// TODO: validate tick data ex: does transaction valid, does tick come from leader, does tick last hash exist, v.v
 		// TODO: handle casse that tick not come in order e.x: tick 2 come, then tick 1 come
 		ticks = append(ticks, tick)
@@ -264,7 +254,7 @@ func (service *POHService) HandleLeaderTick(
 	}
 	// send vote to leader
 	service.SendVoteToLeader(lastBlock, vote)
-	go service.HandleVoteResult(voteBlock, receiveVotedBlockChan, leaderBlockChan, exitChan)
+	go service.HandleVoteResult(voteBlock, service.ReceiveVotedBlockChan, leaderBlockChan, exitChan)
 }
 
 func (service *POHService) SendVoteToLeader(lastBLock *pb.POHBlock, vote *pb.POHVote) {
@@ -296,12 +286,11 @@ func (service *POHService) HandleVoteResult(
 
 func (service *POHService) HandleValidatorVotes(
 	leaderBlock *pb.POHBlock,
-	receiveVoteChan chan *pb.POHVote,
 	leaderBlockChan chan *pb.POHBlock,
 	exitChan chan bool) {
 	for {
 		select {
-		case vote := <-receiveVoteChan:
+		case vote := <-service.ReceiveVoteChan:
 			if vote.Hash == leaderBlock.Hash.Hash {
 				leaderBlock.Votes = append(leaderBlock.Votes, vote)
 			}

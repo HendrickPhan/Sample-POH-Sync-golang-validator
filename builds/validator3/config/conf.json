@@ -17,6 +17,11 @@
             "address": "address2",
             "ip": "127.0.0.1",
             "port": 3002
+        },
+        {
+            "address": "address4",
+            "ip": "127.0.0.1",
+            "port": 3004
         }
     ]
 }

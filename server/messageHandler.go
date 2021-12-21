@@ -19,6 +19,7 @@ type MessageHandler struct {
 	ReceiveLeaderTickChan     chan *pb.POHTick
 	ReceiveVotedBlockChan     chan *pb.POHBlock
 	ReceiveValidatorVotesChan chan *pb.POHVote
+	LeaderIndexChan           chan int
 }
 
 func (handler *MessageHandler) ProcessMessage(message *pb.Message) {

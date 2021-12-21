@@ -4,11 +4,11 @@
 4. validate data from validator  
 5. sync data from valdator  
 6. forward transaction to leader  
-7. receive block from leader   
+~~7. receive block from leader~~   
 ~~8. save branches of POH~~  
 ~~9. handle forks from POH~~  
 ~~10. valid range of count to start, stop hashing~~  
-
+~~11.protobuf~~
 
 # POH optimize
 hash per second
@@ -30,7 +30,15 @@ when validator receive tick from leader it will send to miner to check
 
 
 
-TODO: receive transaction from child
+TODO: receive transactions from child
+    transactions will be send to server via message sendTransactions  
+    messageHandler will add transaction to a receiveSendTransactionChan  
+    there will be a transactionHandler go routine  
+    this go routine will take data from 2 chan receiveSendTransactionChan and blockChan
+    this go routine will run select to know
+    if transaction need to be add to pohRecoder or forward to next leader
+
+
 TODO: foward transaction to next leader
 TODO: send tick to child
 TODO: receive tick validate result from child

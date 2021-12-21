@@ -31,4 +31,9 @@ type POHService struct {
 	TickStart     int64 //
 	TickEnd       int64 // use to throttle tick speed
 
+	BlockChan             chan *pb.POHBlock
+	ReceiveLeaderTickChan chan *pb.POHTick
+	ReceiveVotedBlockChan chan *pb.POHBlock
+	ReceiveVoteChan       chan *pb.POHVote
+	LeaderIndexChan       chan int
 }

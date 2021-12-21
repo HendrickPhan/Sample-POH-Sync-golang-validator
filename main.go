@@ -9,7 +9,13 @@ import (
 	"example_poh.com/server"
 )
 
-func runPoh(startPOHChan chan bool, leaderTickChan chan *pb.POHTick, receiveVotedBlockChan chan *pb.POHBlock, receiveValidatorVotesChan chan *pb.POHVote) {
+func runPoh(
+	startPOHChan chan bool,
+	receiveleaderTickChan chan *pb.POHTick,
+	receiveVotedBlockChan chan *pb.POHBlock,
+	receiveVoteChan chan *pb.POHVote,
+	leaderIndexChan chan int,
+) {
 	start := <-startPOHChan
 	if start {
 		lastHash := &pb.POHHash{
@@ -34,12 +40,17 @@ func runPoh(startPOHChan chan bool, leaderTickChan chan *pb.POHTick, receiveVote
 		}
 
 		pohService := poh.POHService{
-			Recorder:      pohRecorder,
-			Checkpoint:    checkpoint,
-			HashPerSecond: config.AppConfig.HashPerSecond,
-			TickPerSecond: config.AppConfig.TickPerSecond,
-			TickPerSlot:   config.AppConfig.TickPerSlot,
-			TimeOutTicks:  config.AppConfig.TimeOutTicks,
+			Recorder:              pohRecorder,
+			Checkpoint:            checkpoint,
+			HashPerSecond:         config.AppConfig.HashPerSecond,
+			TickPerSecond:         config.AppConfig.TickPerSecond,
+			TickPerSlot:           config.AppConfig.TickPerSlot,
+			TimeOutTicks:          config.AppConfig.TimeOutTicks,
+			BlockChan:             make(chan *pb.POHBlock),
+			ReceiveLeaderTickChan: receiveleaderTickChan,
+			ReceiveVotedBlockChan: receiveVotedBlockChan,
+			ReceiveVoteChan:       receiveVoteChan,
+			LeaderIndexChan:       leaderIndexChan,
 		}
 		validators := config.AppConfig.Validators
 		// add self to validator list cuz this node is validator too
@@ -50,7 +61,7 @@ func runPoh(startPOHChan chan bool, leaderTickChan chan *pb.POHTick, receiveVote
 		})
 		// call this function to sort validator in righ oder
 		pohService.AddValidators(validators)
-		go pohService.Run(leaderTickChan, receiveVotedBlockChan, receiveValidatorVotesChan)
+		go pohService.Run()
 	}
 }
 
@@ -74,6 +85,7 @@ func runServer(
 	receiveLeaderTickChan chan *pb.POHTick,
 	receiveVotedBlockChan chan *pb.POHBlock,
 	receiveValidatorVotesChan chan *pb.POHVote,
+	leaderIndexChan chan int,
 ) {
 	handler := server.MessageHandler{
 		StartPOHChan:              startPOHChan,
@@ -82,6 +94,7 @@ func runServer(
 		ReceiveLeaderTickChan:     receiveLeaderTickChan,
 		ReceiveVotedBlockChan:     receiveVotedBlockChan,
 		ReceiveValidatorVotesChan: receiveValidatorVotesChan,
+		LeaderIndexChan:           leaderIndexChan,
 	}
 	server := server.Server{
 		Address: config.AppConfig.Address,
@@ -105,11 +118,11 @@ func main() {
 	receiveLeaderTickChan := make(chan *pb.POHTick)
 	receiveVotedBlockChan := make(chan *pb.POHBlock)
 	receiveValidatorVotesChan := make(chan *pb.POHVote)
-
+	leaderIndexChan := make(chan int)
 	startPOHChan := make(chan bool)
 	validatorConnections := initValidatorConnections()
 
-	go runPoh(startPOHChan, receiveLeaderTickChan, receiveVotedBlockChan, receiveValidatorVotesChan)
-	go runServer(startPOHChan, validatorConnections, receiveLeaderTickChan, receiveVotedBlockChan, receiveValidatorVotesChan)
+	go runPoh(startPOHChan, receiveLeaderTickChan, receiveVotedBlockChan, receiveValidatorVotesChan, leaderIndexChan)
+	go runServer(startPOHChan, validatorConnections, receiveLeaderTickChan, receiveVotedBlockChan, receiveValidatorVotesChan, leaderIndexChan)
 	<-finish
 }

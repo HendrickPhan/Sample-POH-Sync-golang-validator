@@ -1,3 +1,4 @@
+protoc --go_out=. ./proto/*.proto
 go build .
 cp example_poh.com ./builds/validator1/ 
 cp example_poh.com ./builds/validator2/ 
