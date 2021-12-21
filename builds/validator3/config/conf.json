@@ -4,7 +4,7 @@
     "port": 3003,
     "hash_per_second": 1000,
     "tick_per_second": 100,
-    "tick_per_slot": 50,
+    "tick_per_slot": 20,
     "time_out_ticks": 20,
     "block_stack_size": 32,
     "validators": [

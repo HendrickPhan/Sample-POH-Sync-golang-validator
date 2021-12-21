@@ -27,12 +27,11 @@ tick duration = 1000 /160 = 6.25 ms
 
 TODO: take transaction from recorder
 TODO:  validate data in HandleVoteResult
+TODO: validate POH  
+TODO: sync data before run POH
 
-
-TODO: Loop unallocated to check new tick can complete any branch, or remove too old Unallocated tick
 TODO: update base on greedy transaction fee
 TODO: handle case no block were valid when receive vote leader??
-// TODO: validate tick data
 
 
 Flow of validator

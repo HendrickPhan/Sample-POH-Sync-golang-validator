@@ -43,7 +43,9 @@ func (handler *MessageHandler) handlerValidatorStarted(message dataType.Message)
 	fmt.Printf("Total validator started %v", len(handler.OnlineValidator))
 	if len(handler.OnlineValidator) == len(config.AppConfig.Validators) {
 		// runPoh()
-		handler.StartPOHChan <- true
+		go func() {
+			handler.StartPOHChan <- true
+		}()
 	}
 	// send started back
 	if message.Header.Type == "request" {

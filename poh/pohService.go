@@ -213,6 +213,7 @@ func (service *POHService) CreateLeaderBlock(
 	for totalTickGenerated < service.TickPerSlot {
 		if time.Now().UnixNano()-tickEnd < int64(1000000000/service.TickPerSecond) { //1000000000 is 1 second in nano second
 			// fmt.Printf("Skip\n")
+			time.Sleep(time.Duration((int64(1000000000/service.TickPerSecond) - (time.Now().UnixNano() - tickEnd) - 100))) // 100 is just a addition to make it not to tight
 			continue
 		}
 
