@@ -1,0 +1,149 @@
+package main
+
+import (
+	"fmt"
+
+	"example_poh.com/config"
+	"example_poh.com/dataType"
+	"example_poh.com/network"
+)
+
+func main() {
+	// return
+	/*
+		// const
+		TICK_PER_SLOT := 10000
+
+		fmt.Printf("==== Test Transaction Pool ====\n\n")
+
+		pool := Pool{}
+		pool.Add(Transaction{
+			Hash:     "hashN",
+			From:     "address1",
+			To:       "address2",
+			LastHash: "hashN-1",
+			Amount:   1000,
+			Sign:     "mysign",
+		})
+		pool.Add(Transaction{
+			Hash:     "hashN2",
+			From:     "address3",
+			To:       "address4",
+			LastHash: "hashN2-1",
+			Amount:   2000,
+			Sign:     "mysign2",
+		})
+		pool.Add(Transaction{
+			Hash:     "hashN3",
+			From:     "address5",
+			To:       "address6",
+			LastHash: "hashN3-1",
+			Amount:   3000,
+			Sign:     "mysign3",
+		})
+
+		fmt.Printf("Transaction: %v\n", pool.Take(1))
+
+		fmt.Printf("==== Test POH ====\n\n")
+		validators := initValidators()
+		genesisLastEntry := PohEntry{
+			Count: 0,
+			Hash:  "InitHash",
+		}
+		sp := SamplePoh{
+			lastEntry: genesisLastEntry,
+		}
+		for _, v := range validators {
+			sp.AddValidator(v)
+		}
+
+		transactionsCh := make(chan []Transaction)
+		go func() {
+			for true {
+				select {
+				case transactions, ok := <-transactionsCh:
+					if ok {
+						sp.Hash(transactions)
+						fmt.Printf("Transactions %v\n", transactions)
+					} else {
+						fmt.Println("Channel closed!")
+					}
+				default:
+					fmt.Printf("No Transactions\n")
+					sp.Hash([]Transaction{})
+				}
+				fmt.Printf("Count: %v, Hash: %v, Next leader: %v\n", sp.lastEntry.Count, sp.lastEntry.Hash, sp.GetNextLeader(int64(TICK_PER_SLOT)))
+			}
+		}()
+
+		go func() {
+			// pool := Pool{}
+			// for true {
+			pool.Add(Transaction{
+				Hash:     "hashN",
+				From:     "address1",
+				To:       "address2",
+				LastHash: "hashN-1",
+				Amount:   1000,
+				Sign:     "mysign",
+			})
+			pool.Add(Transaction{
+				Hash:     "hashN2",
+				From:     "address3",
+				To:       "address4",
+				LastHash: "hashN2-1",
+				Amount:   2000,
+				Sign:     "mysign2",
+			})
+			transactionsCh <- pool.Take(2)
+			transactionsCh <- []Transaction{}
+			// }
+		}()
+
+		for true {
+		}
+	*/
+
+	// pool goroutine: which receive transaction from network then send it to POH service
+	chTransaction := make(chan dataType.Transaction)
+	validators := config.AppConfig.Validators
+	genesisLastEntry := PohEntry{
+		Count: 0,
+		Hash:  "InitHash",
+	}
+	sp := SamplePoh{
+		lastEntry:     genesisLastEntry,
+		chTransaction: chTransaction,
+		hashPerSecond: config.AppConfig.HashPerSecond,
+		tickPerSecond: config.AppConfig.TickPerSecond,
+		tickPerSlot:   config.AppConfig.TickPerSlot,
+	}
+	for _, v := range validators {
+		sp.AddValidator(v)
+	}
+
+	go sp.Run()
+
+	fmt.Printf("==== Test UPD  ====\n\n")
+	server := network.Server{
+		IP:            config.AppConfig.Ip,
+		Port:          config.AppConfig.Port,
+		Address:       config.AppConfig.Address,
+		ChTransaction: chTransaction,
+	}
+	server.Listen()
+
+	client := network.Client{
+		ServerIP:      "127.0.0.1",
+		ServerPort:    3000,
+		ServerAddress: "address1",
+		ChTransaction: chTransaction,
+	}
+	client.Connect()
+
+	for true {
+		// client.SendTestTransaction()
+		// client.SendTestTransaction()
+		// client.SendTestTransaction()
+	}
+}

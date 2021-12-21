@@ -1,0 +1,32 @@
+{
+    "address": "address1",
+    "ip": "127.0.0.1",
+    "port": 3001,
+    "hash_per_second": 1600,
+    "tick_per_second": 160,
+    "tick_per_slot": 64,
+    "time_out_ticks": 640,
+    "block_stack_size": 32,
+    "validators": [
+        {
+            "address": "address1",
+            "ip": "127.0.0.1",
+            "port": 3001
+        },
+        {
+            "address": "address2",
+            "ip": "127.0.0.1",
+            "port": 3002
+        },
+        {
+            "address": "address3",
+            "ip": "127.0.0.1",
+            "port": 3003
+        },
+        {
+            "address": "address4",
+            "ip": "127.0.0.1",
+            "port": 3004
+        }
+    ]
+}
