@@ -24,6 +24,27 @@ hash per tick = 1600 / 160 = 10
 tick duration = 1000 /160 = 6.25 ms
 => 10 hash every 6.25 ms 
 
+when validator receive transaction it will forward it to next leader
+
+when validator receive tick from leader it will send to miner to check
+
+
+
+TODO: receive transaction from child
+TODO: foward transaction to next leader
+TODO: send tick to child
+TODO: receive tick validate result from child
+TODO: update data storage, save snap shot
+    
+    - snap shot datastruct:
+    POH:
+        LastBlock    
+    AccountState:
+        [{Address: lasthash}, ...]
+
+TODO: broadcast confrim block to child
+TODO: send sync data to child
+
 
 TODO: take transaction from recorder
 TODO:  validate data in HandleVoteResult
@@ -38,14 +59,7 @@ Flow of validator
 
 ~~when a node start it will send all other node to mark started~~  
 ~~when all node has been start then it will start do poh~~
+ 
 
-start with leader
-leader will create tick and send tick to orther validator
-orther validator will save tick
-at tick 62 orther validator will send voted block to leader, leader will choose most voted block  
-
-leader
-
-0 => 61 generate tick and broad cast to validators
-62 => receive votes and generate block, broadcast block to validators
-63 => 
+# Build proto  
+`protoc --go_out=. ./proto/*.proto`  

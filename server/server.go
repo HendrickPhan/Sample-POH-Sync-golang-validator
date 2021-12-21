@@ -1,11 +1,11 @@
 package server
 
 import (
-	"encoding/json"
 	"fmt"
 	"net"
 
-	"example_poh.com/dataType"
+	pb "example_poh.com/proto"
+	"google.golang.org/protobuf/proto"
 )
 
 type Server struct {
@@ -33,7 +33,7 @@ func (server *Server) Run(handler MessageHandler) {
 	go func() {
 		// TODO: find better way to manage this, like time out for pending, check hash, encrypt, v.v
 		// but in dev process i just keep it simple
-		pendingMessages := make(map[string]dataType.Message) // map between id and message
+		pendingMessages := make(map[string]*pb.Message) // map between id and message
 
 		for {
 			n, _, err := ser.ReadFromUDP(p)
@@ -43,11 +43,11 @@ func (server *Server) Run(handler MessageHandler) {
 				fmt.Printf("Some error  %v", err)
 				continue
 			}
-			var message dataType.Message
-			json.Unmarshal(p[:n], &message)
+			message := &pb.Message{}
+			proto.Unmarshal(p[:n], message)
 			if pendingMessage, ok := pendingMessages[message.Header.Id]; ok {
 				//do something here
-				pendingMessage.Body += message.Body
+				pendingMessage.Body = append(pendingMessage.Body, message.Body...)
 				pendingMessage.Header.TotalReceived++
 				pendingMessages[message.Header.Id] = pendingMessage
 				if pendingMessage.Header.TotalPackage == pendingMessage.Header.TotalReceived {

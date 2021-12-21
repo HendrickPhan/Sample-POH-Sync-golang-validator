@@ -1,14 +1,15 @@
 package client
 
 import (
-	"encoding/json"
 	"fmt"
 	"math"
 	"net"
 
 	"example_poh.com/config"
-	"example_poh.com/dataType"
 	"github.com/google/uuid"
+
+	pb "example_poh.com/proto"
+	"google.golang.org/protobuf/proto"
 )
 
 type Client struct {
@@ -26,17 +27,17 @@ func (client *Client) GetWalletAddress() string {
 	return client.Address
 }
 
-func (client *Client) SendMessage(message dataType.Message) error {
+func (client *Client) SendMessage(message *pb.Message) error {
 	maxBodySize := 50000
 	bytesBody := []byte(message.Body)
 	totalPackage := math.Ceil(float64(len(bytesBody)) / float64(maxBodySize))
 	if totalPackage == 0 {
 		totalPackage = 1
 	}
-	message.Header.TotalPackage = int(totalPackage)
+	message.Header.TotalPackage = int32(totalPackage)
 	message.Header.Id = uuid.New().String()
 
-	for i := 0; i < message.Header.TotalPackage; i++ {
+	for i := 0; int32(i) < message.Header.TotalPackage; i++ {
 		var sendBody []byte
 		if len(bytesBody) < maxBodySize {
 			sendBody = bytesBody
@@ -44,14 +45,15 @@ func (client *Client) SendMessage(message dataType.Message) error {
 			sendBody = bytesBody[:maxBodySize]
 			bytesBody = bytesBody[maxBodySize:]
 		}
-		sendMessage := dataType.Message{
+		sendMessage := &pb.Message{
 			Header: message.Header,
-			Body:   string(sendBody),
+			Body:   sendBody,
 		}
 
-		b, err := json.Marshal(sendMessage)
+		// b, err := json.Marshal(sendMessage)
+		b, err := proto.Marshal(sendMessage)
 		if err != nil {
-			fmt.Printf("Error when unmarshal %v", err)
+			fmt.Printf("Error when marshal %v", err)
 			return err
 		}
 		conn, err := net.Dial("udp", client.GetConnectionAddress())
@@ -67,8 +69,8 @@ func (client *Client) SendMessage(message dataType.Message) error {
 }
 
 func (client *Client) SendStarted(t string) {
-	message := dataType.Message{
-		Header: dataType.Header{
+	message := &pb.Message{
+		Header: &pb.Header{
 			Type:    t,
 			From:    config.AppConfig.Address,
 			Command: "ValidatorStarted",
@@ -81,15 +83,15 @@ func (client *Client) SendStarted(t string) {
 	}
 }
 
-func (client *Client) SendLeaderTick(tick interface{}) {
-	jsonRs, _ := json.Marshal(tick)
-	message := dataType.Message{
-		Header: dataType.Header{
+func (client *Client) SendLeaderTick(tick *pb.POHTick) {
+	protoRs, _ := proto.Marshal(tick)
+	message := &pb.Message{
+		Header: &pb.Header{
 			Type:    "request",
 			From:    config.AppConfig.Address,
 			Command: "LeaderTick",
 		},
-		Body: string(jsonRs),
+		Body: protoRs,
 	}
 
 	err := client.SendMessage(message)
@@ -98,15 +100,15 @@ func (client *Client) SendLeaderTick(tick interface{}) {
 	}
 }
 
-func (client *Client) SendVoteLeaderBlock(vote interface{}) {
-	jsonRs, _ := json.Marshal(vote)
-	message := dataType.Message{
-		Header: dataType.Header{
+func (client *Client) SendVoteLeaderBlock(vote *pb.POHVote) {
+	protoRs, _ := proto.Marshal(vote)
+	message := &pb.Message{
+		Header: &pb.Header{
 			Type:    "request",
 			From:    config.AppConfig.Address,
 			Command: "VoteLeaderBlock",
 		},
-		Body: string(jsonRs),
+		Body: protoRs,
 	}
 
 	err := client.SendMessage(message)
@@ -115,15 +117,15 @@ func (client *Client) SendVoteLeaderBlock(vote interface{}) {
 	}
 }
 
-func (client *Client) SendVotedBlock(block interface{}) {
-	jsonRs, _ := json.Marshal(block)
-	message := dataType.Message{
-		Header: dataType.Header{
+func (client *Client) SendVotedBlock(block *pb.POHBlock) {
+	protoRs, _ := proto.Marshal(block)
+	message := &pb.Message{
+		Header: &pb.Header{
 			Type:    "request",
 			From:    config.AppConfig.Address,
 			Command: "VotedBlock",
 		},
-		Body: string(jsonRs),
+		Body: protoRs,
 	}
 
 	err := client.SendMessage(message)

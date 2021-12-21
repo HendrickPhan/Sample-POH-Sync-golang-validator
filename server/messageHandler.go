@@ -1,14 +1,13 @@
 package server
 
 import (
-	"encoding/json"
 	"fmt"
 	"sync"
 
 	"example_poh.com/client"
 	"example_poh.com/config"
-	"example_poh.com/dataType"
-	"example_poh.com/poh"
+	pb "example_poh.com/proto"
+	"google.golang.org/protobuf/proto"
 )
 
 type MessageHandler struct {
@@ -17,12 +16,12 @@ type MessageHandler struct {
 	mu                   sync.Mutex
 	OnlineValidator      map[string]*client.Client
 	//POH relates
-	ReceiveLeaderTickChan     chan poh.POHTick
-	ReceiveVotedBlockChan     chan poh.POHBlock
-	ReceiveValidatorVotesChan chan poh.POHVote
+	ReceiveLeaderTickChan     chan *pb.POHTick
+	ReceiveVotedBlockChan     chan *pb.POHBlock
+	ReceiveValidatorVotesChan chan *pb.POHVote
 }
 
-func (handler *MessageHandler) ProcessMessage(message dataType.Message) {
+func (handler *MessageHandler) ProcessMessage(message *pb.Message) {
 	switch message.Header.Command {
 	case "ValidatorStarted":
 		handler.handlerValidatorStarted(message)
@@ -35,7 +34,7 @@ func (handler *MessageHandler) ProcessMessage(message dataType.Message) {
 	}
 }
 
-func (handler *MessageHandler) handlerValidatorStarted(message dataType.Message) {
+func (handler *MessageHandler) handlerValidatorStarted(message *pb.Message) {
 	handler.mu.Lock()
 	defer handler.mu.Unlock()
 	// add to online
@@ -53,25 +52,20 @@ func (handler *MessageHandler) handlerValidatorStarted(message dataType.Message)
 	}
 }
 
-func (handler *MessageHandler) convertBodyToStruct(body interface{}, str interface{}) {
-	jsonBody, _ := json.Marshal(body)
-	json.Unmarshal(jsonBody, str)
-}
-
-func (handler *MessageHandler) handlerLeaderTick(message dataType.Message) {
-	var tick poh.POHTick
-	json.Unmarshal([]byte(message.Body), &tick)
+func (handler *MessageHandler) handlerLeaderTick(message *pb.Message) {
+	tick := &pb.POHTick{}
+	proto.Unmarshal([]byte(message.Body), tick)
 	handler.ReceiveLeaderTickChan <- tick
 }
 
-func (handler *MessageHandler) handlerVotedBlock(message dataType.Message) {
-	var block poh.POHBlock
-	json.Unmarshal([]byte(message.Body), &block)
+func (handler *MessageHandler) handlerVotedBlock(message *pb.Message) {
+	block := &pb.POHBlock{}
+	proto.Unmarshal([]byte(message.Body), block)
 	handler.ReceiveVotedBlockChan <- block
 }
 
-func (handler *MessageHandler) handlerVoteLeaderBlock(message dataType.Message) {
-	var vote poh.POHVote
-	json.Unmarshal([]byte(message.Body), &vote)
+func (handler *MessageHandler) handlerVoteLeaderBlock(message *pb.Message) {
+	vote := &pb.POHVote{}
+	proto.Unmarshal([]byte(message.Body), vote)
 	handler.ReceiveValidatorVotesChan <- vote
 }

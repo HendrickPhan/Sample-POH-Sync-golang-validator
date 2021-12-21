@@ -12,14 +12,15 @@ import (
 	"example_poh.com/client"
 	"example_poh.com/config"
 	"example_poh.com/dataType"
+	pb "example_poh.com/proto"
 )
 
 func (service *POHService) Run(
-	receiveleaderTickChan chan POHTick,
-	receiveVotedBlockChan chan POHBlock,
-	receiveVotesChan chan POHVote,
+	receiveleaderTickChan chan *pb.POHTick,
+	receiveVotedBlockChan chan *pb.POHBlock,
+	receiveVotesChan chan *pb.POHVote,
 ) {
-	blockChan := make(chan POHBlock)
+	blockChan := make(chan *pb.POHBlock)
 	go func() {
 		blockChan <- service.Checkpoint
 	}()
@@ -44,21 +45,21 @@ func (service *POHService) Run(
 }
 
 func (service *POHService) RunAsLeader(
-	lastBlock POHBlock,
-	blockChan chan POHBlock,
-	receiveVotesChan chan POHVote,
+	lastBlock *pb.POHBlock,
+	blockChan chan *pb.POHBlock,
+	receiveVotesChan chan *pb.POHVote,
 ) {
 	exitChan := make(chan bool)
 	defer func() { // close all channel before exit
 		exitChan <- true
 	}()
 
-	virtualBlockChan := make(chan POHBlock)
-	leaderBlockChan := make(chan POHBlock)
+	virtualBlockChan := make(chan *pb.POHBlock)
+	leaderBlockChan := make(chan *pb.POHBlock)
 	go service.CreateVirtualBlock(lastBlock, virtualBlockChan)
 	go service.CreateLeaderBlock(lastBlock, receiveVotesChan, leaderBlockChan, exitChan)
-	var virtualBlock POHBlock
-	var leaderBlock POHBlock
+	var virtualBlock *pb.POHBlock
+	var leaderBlock *pb.POHBlock
 	tickTime := 1000000000 / service.TickPerSecond
 	timeOut := time.Now().UnixNano() + int64(tickTime*(service.TickPerSlot+service.TimeOutTicks))
 	for {
@@ -80,17 +81,17 @@ func (service *POHService) RunAsLeader(
 	}
 }
 
-func (service *POHService) RunAsValidator(lastBlock POHBlock, blockChan chan POHBlock, receiveVotedBlockChan chan POHBlock, receiveLeaderTickChan chan POHTick) {
+func (service *POHService) RunAsValidator(lastBlock *pb.POHBlock, blockChan chan *pb.POHBlock, receiveVotedBlockChan chan *pb.POHBlock, receiveLeaderTickChan chan *pb.POHTick) {
 	exitChan := make(chan bool)
 	defer func() { // close all channel before exit
 		exitChan <- true
 	}()
-	virtualBlockChan := make(chan POHBlock)
-	leaderBlockChan := make(chan POHBlock)
+	virtualBlockChan := make(chan *pb.POHBlock)
+	leaderBlockChan := make(chan *pb.POHBlock)
 
 	go service.CreateVirtualBlock(lastBlock, virtualBlockChan)
 	go service.HandleLeaderTick(lastBlock, receiveLeaderTickChan, receiveVotedBlockChan, leaderBlockChan, exitChan)
-	var virtualBlock POHBlock
+	var virtualBlock *pb.POHBlock
 	tickTime := 1000000000 / service.TickPerSecond
 	timeOut := time.Now().UnixNano() + int64(tickTime*(service.TickPerSlot+service.TimeOutTicks))
 	for {
@@ -111,11 +112,11 @@ func (service *POHService) RunAsValidator(lastBlock POHBlock, blockChan chan POH
 	}
 }
 
-func (service *POHService) CreateVirtualBlock(lastBlock POHBlock, virtualBlockChan chan POHBlock) {
+func (service *POHService) CreateVirtualBlock(lastBlock *pb.POHBlock, virtualBlockChan chan *pb.POHBlock) {
 	// This function use to create virtual block when is not a leader
 	totalTickGenerated := 0
 	lastTick := lastBlock.Ticks[len(lastBlock.Ticks)-1]
-	var ticks []POHTick
+	var ticks []*pb.POHTick
 	for totalTickGenerated < service.TickPerSlot {
 		tick := service.CreateTick(lastTick, false)
 		ticks = append(ticks, tick)
@@ -124,7 +125,7 @@ func (service *POHService) CreateVirtualBlock(lastBlock POHBlock, virtualBlockCh
 	}
 	lastHash := lastTick.Hashes[len(lastTick.Hashes)-1]
 	// Gen virtual block
-	block := POHBlock{
+	block := &pb.POHBlock{
 		Ticks: ticks,
 		Count: lastBlock.Count + 1,
 		Type:  "virtual",
@@ -133,13 +134,13 @@ func (service *POHService) CreateVirtualBlock(lastBlock POHBlock, virtualBlockCh
 	virtualBlockChan <- block
 }
 
-func (service *POHService) CreateLeaderTick(lastTick POHTick) POHTick {
+func (service *POHService) CreateLeaderTick(lastTick *pb.POHTick) *pb.POHTick {
 	// This function use to create tick when is a leader
 	tick := service.CreateTick(lastTick, true)
 	return tick
 }
 
-func (service *POHService) broadCastLeaderTick(tick POHTick) {
+func (service *POHService) broadCastLeaderTick(tick *pb.POHTick) {
 	for _, v := range service.Validators {
 		if v.Address != config.AppConfig.Address {
 			client := client.Client{
@@ -153,14 +154,14 @@ func (service *POHService) broadCastLeaderTick(tick POHTick) {
 	}
 }
 
-func (service *POHService) CreateTick(lastTick POHTick, takeTransaction bool) POHTick {
+func (service *POHService) CreateTick(lastTick *pb.POHTick, takeTransaction bool) *pb.POHTick {
 
 	hashPerTick := service.HashPerSecond / service.TickPerSecond
 	totalHashGenerated := 0
 	lastHash := lastTick.Hashes[len(lastTick.Hashes)-1]
-	var hashes []POHHash
+	var hashes []*pb.POHHash
 	for totalHashGenerated < hashPerTick {
-		var transactions []dataType.Transaction
+		var transactions []*pb.Transaction
 		if takeTransaction {
 			// TODO: take transaction from recorder
 		}
@@ -169,24 +170,24 @@ func (service *POHService) CreateTick(lastTick POHTick, takeTransaction bool) PO
 		lastHash = hash
 		totalHashGenerated++
 	}
-	tick := POHTick{
+	tick := &pb.POHTick{
 		Hashes: hashes,
 		Count:  lastTick.Count + 1,
 	}
 	return tick
 }
 
-func (service *POHService) createLeaderBlockWithSelfGenLastTick(lastBlock POHBlock, ticks []POHTick) POHBlock {
+func (service *POHService) createLeaderBlockWithSelfGenLastTick(lastBlock *pb.POHBlock, ticks []*pb.POHTick) *pb.POHBlock {
 	previousLastTick := ticks[len(ticks)-1]
 	lastTick := service.CreateTick(previousLastTick, false)
 	ticks = append(ticks, lastTick)
 	lastHash := lastTick.Hashes[len(lastTick.Hashes)-1]
-	leaderBlock := POHBlock{
+	leaderBlock := &pb.POHBlock{
 		Ticks: ticks,
 		Count: lastBlock.Count + 1,
 		Type:  "leader",
 		Hash:  lastHash,
-		Votes: []POHVote{
+		Votes: []*pb.POHVote{
 			{
 				Address: config.AppConfig.Address,
 				Hash:    lastHash.Hash,
@@ -197,15 +198,15 @@ func (service *POHService) createLeaderBlockWithSelfGenLastTick(lastBlock POHBlo
 }
 
 func (service *POHService) CreateLeaderBlock(
-	lastBlock POHBlock,
-	receiveVoteChan chan POHVote,
-	leaderBlockChan chan POHBlock,
+	lastBlock *pb.POHBlock,
+	receiveVoteChan chan *pb.POHVote,
+	leaderBlockChan chan *pb.POHBlock,
 	exitChan chan bool,
 ) {
 	// This function use to create block when is a leader
 	totalTickGenerated := 0
 	lastTick := lastBlock.Ticks[len(lastBlock.Ticks)-1]
-	var ticks []POHTick
+	var ticks []*pb.POHTick
 
 	// throttle tick
 	var tickEnd int64
@@ -236,14 +237,14 @@ func (service *POHService) CreateLeaderBlock(
 }
 
 func (service *POHService) HandleLeaderTick(
-	lastBlock POHBlock,
-	receiveLeaderTickChannel chan POHTick,
-	receiveVotedBlockChan chan POHBlock,
-	leaderBlockChan chan POHBlock,
+	lastBlock *pb.POHBlock,
+	receiveLeaderTickChannel chan *pb.POHTick,
+	receiveVotedBlockChan chan *pb.POHBlock,
+	leaderBlockChan chan *pb.POHBlock,
 	exitChan chan bool) {
 	// This function use to handle tick data from leader
 	totalTickGenerated := 0
-	var ticks []POHTick
+	var ticks []*pb.POHTick
 	for totalTickGenerated < service.TickPerSlot-1 {
 		// append tick to create vote block
 		tick := <-receiveLeaderTickChannel
@@ -256,7 +257,7 @@ func (service *POHService) HandleLeaderTick(
 	// create vote and send to leader
 	// generate last tick and vote block
 	voteBlock := service.createLeaderBlockWithSelfGenLastTick(lastBlock, ticks)
-	vote := POHVote{
+	vote := &pb.POHVote{
 		Hash:    voteBlock.Hash.Hash,
 		Address: config.AppConfig.Address,
 		Sign:    "TODO", // TODO: sign vote
@@ -266,7 +267,7 @@ func (service *POHService) HandleLeaderTick(
 	go service.HandleVoteResult(voteBlock, receiveVotedBlockChan, leaderBlockChan, exitChan)
 }
 
-func (service *POHService) SendVoteToLeader(lastBLock POHBlock, vote POHVote) {
+func (service *POHService) SendVoteToLeader(lastBLock *pb.POHBlock, vote *pb.POHVote) {
 	leader := service.getCurrentLeader(lastBLock)
 	client := client.Client{
 		Address: leader.Address,
@@ -278,9 +279,9 @@ func (service *POHService) SendVoteToLeader(lastBLock POHBlock, vote POHVote) {
 }
 
 func (service *POHService) HandleVoteResult(
-	voteBlock POHBlock,
-	receiveVotedBlockChan chan POHBlock,
-	leaderBlockChan chan POHBlock,
+	voteBlock *pb.POHBlock,
+	receiveVotedBlockChan chan *pb.POHBlock,
+	leaderBlockChan chan *pb.POHBlock,
 	exitChan chan bool,
 ) {
 	// This function use to handle voted block data from leader
@@ -294,9 +295,9 @@ func (service *POHService) HandleVoteResult(
 }
 
 func (service *POHService) HandleValidatorVotes(
-	leaderBlock POHBlock,
-	receiveVoteChan chan POHVote,
-	leaderBlockChan chan POHBlock,
+	leaderBlock *pb.POHBlock,
+	receiveVoteChan chan *pb.POHVote,
+	leaderBlockChan chan *pb.POHBlock,
 	exitChan chan bool) {
 	for {
 		select {
@@ -318,7 +319,7 @@ func (service *POHService) HandleValidatorVotes(
 	}
 }
 
-func (service *POHService) BroadCastVotedBlockToValidators(votedBlock POHBlock) {
+func (service *POHService) BroadCastVotedBlockToValidators(votedBlock *pb.POHBlock) {
 	for _, v := range service.Validators {
 		if v.Address != config.AppConfig.Address {
 			client := client.Client{
@@ -343,21 +344,21 @@ func (service *POHService) getNodeIdx() int {
 	return nodeIdx
 }
 
-func (service *POHService) isLeader(lastBlock POHBlock) bool {
+func (service *POHService) isLeader(lastBlock *pb.POHBlock) bool {
 	fmt.Printf("Is leader %v, %v\n", int((lastBlock.Count+1)%int64(len(service.Validators))), service.getNodeIdx())
 	return int((lastBlock.Count+1)%int64(len(service.Validators))) == service.getNodeIdx()
 }
 
-func (service *POHService) isNextLeader(lastBlock POHBlock) bool {
+func (service *POHService) isNextLeader(lastBlock *pb.POHBlock) bool {
 	return int((lastBlock.Count+1)%int64(len(service.Validators))) == service.getNodeIdx()-1
 }
 
-func (service *POHService) getCurrentLeader(lastBlock POHBlock) dataType.Validator {
+func (service *POHService) getCurrentLeader(lastBlock *pb.POHBlock) dataType.Validator {
 	leaderIdx := int((lastBlock.Count + 1) % int64(len(service.Validators)))
 	return service.Validators[leaderIdx]
 }
 
-func (service *POHService) generatePOHHash(transactions []dataType.Transaction, lastHash POHHash) POHHash {
+func (service *POHService) generatePOHHash(transactions []*pb.Transaction, lastHash *pb.POHHash) *pb.POHHash {
 	h := sha256.New()
 	transactionsHashString := ""
 	for _, transaction := range transactions {
@@ -366,7 +367,7 @@ func (service *POHService) generatePOHHash(transactions []dataType.Transaction, 
 
 	h.Write([]byte(strconv.FormatInt(lastHash.Count, 10) + lastHash.Hash + transactionsHashString))
 
-	result := POHHash{
+	result := &pb.POHHash{
 		Count:        lastHash.Count + 1,
 		LastHash:     lastHash.Hash,
 		Hash:         hex.EncodeToString(h.Sum(nil)),

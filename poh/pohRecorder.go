@@ -4,9 +4,10 @@ import (
 	"fmt"
 
 	"example_poh.com/config"
+	pb "example_poh.com/proto"
 )
 
-func (recorder *POHRecorder) AddBlock(block POHBlock) {
+func (recorder *POHRecorder) AddBlock(block *pb.POHBlock) {
 	if block.Count < recorder.StartBlockCount {
 		// skip block not in count range. May skip to far in future block?
 		return
@@ -35,19 +36,19 @@ func (recorder *POHRecorder) AddBlock(block POHBlock) {
 		recorder.removeOldBlockFromBranches()
 	} else {
 		if block.Count == recorder.StartBlockCount {
-			recorder.Branches = append(recorder.Branches, recorder.createBranch([]POHBlock{block}))
+			recorder.Branches = append(recorder.Branches, recorder.createBranch([]*pb.POHBlock{block}))
 			recorder.updateMainBranch()
 
 		}
 	}
 }
 
-func (recorder *POHRecorder) GetMainBranchLastBlock() POHBlock {
+func (recorder *POHRecorder) GetMainBranchLastBlock() *pb.POHBlock {
 	mainBranch := recorder.Branches[recorder.MainBranchIdx]
 	return mainBranch.Blocks[len(mainBranch.Blocks)-1]
 }
 
-func (recorder *POHRecorder) findBranchIdxForNewBlock(block POHBlock) int {
+func (recorder *POHRecorder) findBranchIdxForNewBlock(block *pb.POHBlock) int {
 	blockParentHash := block.Ticks[0].Hashes[0].LastHash
 	idxOfParentBlock := block.Count - recorder.StartBlockCount - 1
 	for i, branch := range recorder.Branches {
@@ -58,11 +59,11 @@ func (recorder *POHRecorder) findBranchIdxForNewBlock(block POHBlock) int {
 	return -1
 }
 
-func (recorder *POHRecorder) createBranch(blocks []POHBlock) POHBranch {
+func (recorder *POHRecorder) createBranch(blocks []*pb.POHBlock) POHBranch {
 	totalTransaction := 0
 	totalLeaderBlock := 0
 	for _, block := range blocks {
-		totalTransaction += block.GetTotalTransaction()
+		totalTransaction += GetTotalTransaction(block)
 		if block.Type == "leader" {
 			totalLeaderBlock++
 		}

@@ -5,24 +5,25 @@ import (
 	"example_poh.com/config"
 	"example_poh.com/dataType"
 	"example_poh.com/poh"
+	pb "example_poh.com/proto"
 	"example_poh.com/server"
 )
 
-func runPoh(startPOHChan chan bool, leaderTickChan chan poh.POHTick, receiveVotedBlockChan chan poh.POHBlock, receiveValidatorVotesChan chan poh.POHVote) {
+func runPoh(startPOHChan chan bool, leaderTickChan chan *pb.POHTick, receiveVotedBlockChan chan *pb.POHBlock, receiveValidatorVotesChan chan *pb.POHVote) {
 	start := <-startPOHChan
 	if start {
-		lastHash := poh.POHHash{
+		lastHash := &pb.POHHash{
 			Count:    1,
 			LastHash: "",
 			Hash:     "INIT_HASH",
 		}
-		lastTick := poh.POHTick{
-			Hashes: []poh.POHHash{lastHash},
+		lastTick := &pb.POHTick{
+			Hashes: []*pb.POHHash{lastHash},
 			Count:  1,
 		}
 
-		checkpoint := poh.POHBlock{
-			Ticks: []poh.POHTick{lastTick},
+		checkpoint := &pb.POHBlock{
+			Ticks: []*pb.POHTick{lastTick},
 			Count: 1,
 			Type:  "leader",
 			Hash:  lastHash,
@@ -70,9 +71,9 @@ func initValidatorConnections() map[string]*client.Client {
 func runServer(
 	startPOHChan chan bool,
 	validatorConnections map[string]*client.Client,
-	receiveLeaderTickChan chan poh.POHTick,
-	receiveVotedBlockChan chan poh.POHBlock,
-	receiveValidatorVotesChan chan poh.POHVote,
+	receiveLeaderTickChan chan *pb.POHTick,
+	receiveVotedBlockChan chan *pb.POHBlock,
+	receiveValidatorVotesChan chan *pb.POHVote,
 ) {
 	handler := server.MessageHandler{
 		StartPOHChan:              startPOHChan,
@@ -101,9 +102,9 @@ func sendStartedToAllValidator(validatorConnections map[string]*client.Client) {
 
 func main() {
 	finish := make(chan bool)
-	receiveLeaderTickChan := make(chan poh.POHTick)
-	receiveVotedBlockChan := make(chan poh.POHBlock)
-	receiveValidatorVotesChan := make(chan poh.POHVote)
+	receiveLeaderTickChan := make(chan *pb.POHTick)
+	receiveVotedBlockChan := make(chan *pb.POHBlock)
+	receiveValidatorVotesChan := make(chan *pb.POHVote)
 
 	startPOHChan := make(chan bool)
 	validatorConnections := initValidatorConnections()

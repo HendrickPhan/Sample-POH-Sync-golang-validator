@@ -1,0 +1,31 @@
+syntax = "proto3";
+package poh;
+import "proto/transaction.proto";
+option go_package = "/proto";
+
+message POHHash {
+    int64 Count = 1;
+    string LastHash = 2;
+    string Hash = 3;
+    repeated  transaction.Transaction  Transactions = 4;
+} 
+
+
+message POHTick {
+	repeated POHHash Hashes = 1;
+	int64 Count = 2;
+}
+
+message POHBlock {
+	repeated POHTick Ticks = 1;
+	int64 Count = 2;
+    string Type = 3; 
+    POHHash Hash = 4; 
+    repeated POHVote Votes = 5; 
+}
+
+message POHVote {
+    string Hash = 1;
+    string Address = 2;
+    string Sign = 3;
+}
