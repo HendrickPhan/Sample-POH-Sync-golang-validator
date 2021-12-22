@@ -24,5 +24,6 @@
             "ip": "127.0.0.1",
             "port": 3003
         }
-    ]
+    ],
+    "number_of_validate_poh_routine": 10
 }

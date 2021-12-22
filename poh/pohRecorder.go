@@ -25,6 +25,7 @@ func (recorder *POHRecorder) AddBlock(block *pb.POHBlock) {
 		} else {
 			// just append new block to branch
 			recorder.Branches[branchIdx].Blocks = append(recorder.Branches[branchIdx].Blocks, block)
+			recorder.Branches[branchIdx].TotalTransaction += GetTotalTransaction(block)
 		}
 
 		// some update needed after insert a block
@@ -98,7 +99,12 @@ func (recorder *POHRecorder) removeOldBlockFromBranches() {
 	for i := range recorder.Branches {
 		totalRemovableBlock := recorder.StartBlockCount - recorder.Branches[i].Blocks[0].Count
 		if totalRemovableBlock > 0 {
+			totalRemoveTransaction := 0
+			for _, v := range recorder.Branches[i].Blocks[:totalRemovableBlock] {
+				totalRemoveTransaction += GetTotalTransaction(v)
+			}
 			recorder.Branches[i].Blocks = recorder.Branches[i].Blocks[totalRemovableBlock:]
+			recorder.Branches[i].TotalTransaction -= totalRemoveTransaction
 		}
 	}
 }

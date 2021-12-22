@@ -1,7 +1,6 @@
 package server
 
 import (
-	"fmt"
 	"sort"
 	"sync"
 
@@ -68,12 +67,19 @@ func (handler *MessageHandler) handlerValidatorStarted(message *pb.Message) {
 }
 
 func (handler *MessageHandler) handlerLeaderTick(message *pb.Message) {
+	if handler.Validators[handler.LeaderIndex].Address != message.Header.From {
+		// fmt.Printf("ERR: Tick not from leader")
+		return // tick must from current leader or this node will skip it
+	}
 	tick := &pb.POHTick{}
 	proto.Unmarshal([]byte(message.Body), tick)
 	handler.ReceiveLeaderTickChan <- tick
 }
 
 func (handler *MessageHandler) handlerVotedBlock(message *pb.Message) {
+	if handler.Validators[handler.LeaderIndex].Address != message.Header.From {
+		return // voted block must from current leader or this node will skip it
+	}
 	block := &pb.POHBlock{}
 	proto.Unmarshal([]byte(message.Body), block)
 	handler.ReceiveVotedBlockChan <- block
@@ -86,7 +92,6 @@ func (handler *MessageHandler) handlerVoteLeaderBlock(message *pb.Message) {
 }
 
 func (handler *MessageHandler) handlerSendCheckedBlock(message *pb.Message) {
-	fmt.Println("Receive CheckedBlock")
 	var nextLeaderIdx int
 	if handler.LeaderIndex+1 == len(handler.Validators) { // end of validator list so return to first validator
 		nextLeaderIdx = 0

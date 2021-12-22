@@ -3,6 +3,7 @@ package poh
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"math"
 	"sort"
@@ -36,6 +37,9 @@ func (service *POHService) Run() {
 		// add to recorder to update poh block history
 		fmt.Printf("Last block count: %v, type: %v\n", lastBlock.Count, lastBlock.Type)
 		service.Recorder.AddBlock(lastBlock)
+		if len(service.Recorder.Branches) > 0 {
+			fmt.Printf("Branch total transaction: %v\n", service.Recorder.Branches[service.Recorder.MainBranchIdx].TotalTransaction)
+		}
 		// get main branch last block to start working on
 		mainBranchLastBlock := service.Recorder.GetMainBranchLastBlock()
 
@@ -237,6 +241,58 @@ func (service *POHService) CreateLeaderBlock(
 	}
 }
 
+func (service *POHService) validateLeaderTick(lastTick *pb.POHTick, tick *pb.POHTick) error {
+	if lastTick.Count+1 != tick.Count {
+		return fmt.Errorf("invalid tick count %v, %v", lastTick.Count+1, tick.Count)
+	}
+	if lastTick.Hashes[len(lastTick.Hashes)-1].Hash != tick.Hashes[0].LastHash {
+		return fmt.Errorf("invalid tick hash %v, %v", lastTick.Hashes[len(lastTick.Hashes)-1].Hash, tick.Hashes[0].LastHash)
+	}
+	// validate POH in tick
+	validatePOHChan := make(chan bool)
+	exitChan := make(chan bool)
+
+	for i := 0; i < config.AppConfig.NumberOfValidatePohRoutine; i++ {
+		hashPerTick := service.HashPerSecond / service.TickPerSecond
+		hashNeedValidatePerRoutine := int(math.Ceil(float64(hashPerTick) / float64(config.AppConfig.NumberOfValidatePohRoutine))) // ceil to not miss any transaction
+		go func(i int) {
+			validateFromIdx := i*hashNeedValidatePerRoutine - 1
+			if validateFromIdx < 0 {
+				validateFromIdx = 0
+			}
+			validateToIdx := (i + 1) * hashNeedValidatePerRoutine
+			hashNeedValidate := tick.Hashes[validateFromIdx:validateToIdx]
+			for i := 1; i < len(hashNeedValidate); i++ {
+				select {
+				case <-exitChan:
+					return
+				default:
+					rightHash := service.generatePOHHash(hashNeedValidate[i].Transactions, hashNeedValidate[i-1])
+					if rightHash != hashNeedValidate[i] {
+						validatePOHChan <- false
+					}
+				}
+			}
+		}(i)
+	}
+	totalValidRoutine := 0
+	for {
+		valid := <-validatePOHChan
+		if !valid {
+			<-exitChan
+			return errors.New("Invalid POH")
+		} else {
+			totalValidRoutine++
+			fmt.Printf("Total valid validate poh routine %v\n", totalValidRoutine)
+		}
+		if totalValidRoutine == config.AppConfig.NumberOfValidatePohRoutine {
+			return nil
+		}
+
+	}
+	// TODO: send to child to validate
+}
+
 func (service *POHService) HandleLeaderTick(
 	lastBlock *pb.POHBlock,
 	leaderBlockChan chan *pb.POHBlock,
@@ -247,7 +303,16 @@ func (service *POHService) HandleLeaderTick(
 	for totalTickGenerated < service.TickPerSlot-1 {
 		// append tick to create vote block
 		tick := <-service.ReceiveLeaderTickChan
-		// TODO: validate tick data ex: does transaction valid, does tick come from leader, does tick last hash exist, v.v
+		// var err error
+		// if len(ticks) > 0 { // if first tick then last tick is last tick of last block
+		// 	err = service.validateLeaderTick(ticks[len(ticks)-1], tick)
+		// } else {
+		// 	err = service.validateLeaderTick(lastBlock.Ticks[len(lastBlock.Ticks)-1], tick)
+		// }
+		// if err != nil {
+		// 	fmt.Printf("Error when validate leader tick: %v\n", err)
+		// 	continue
+		// }
 		// TODO: handle casse that tick not come in order e.x: tick 2 come, then tick 1 come
 		ticks = append(ticks, tick)
 		totalTickGenerated++
