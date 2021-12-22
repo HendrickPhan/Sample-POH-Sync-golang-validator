@@ -20,10 +20,19 @@ func (service *POHService) Run() {
 		service.BlockChan <- service.Checkpoint
 	}()
 
-	for {
-		fmt.Printf("RUN")
+	go func() { // receive transaction from server
+		for {
+			// I think maybe need to lock here if have error about sync block from server to recorder and service
+			checkedBlock := <-service.ReceiveCheckedBlockChan
+			service.Recorder.AddTransactionFromCheckedBlock(checkedBlock)
+		}
+	}()
 
+	for {
 		lastBlock := <-service.BlockChan
+		// send leader index to this chan so message handler know what to do with incomming transactions
+		service.LeaderIndexChan <- service.getCurrentLeaderIdx(lastBlock)
+
 		// add to recorder to update poh block history
 		fmt.Printf("Last block count: %v, type: %v\n", lastBlock.Count, lastBlock.Type)
 		service.Recorder.AddBlock(lastBlock)
@@ -32,16 +41,15 @@ func (service *POHService) Run() {
 
 		// check from last block that this block will be leader
 		if service.isLeader(mainBranchLastBlock) {
-			fmt.Printf("Run as leader\n")
 			go service.RunAsLeader(mainBranchLastBlock)
 		} else {
-			fmt.Printf("Run as validator\n")
 			go service.RunAsValidator(mainBranchLastBlock)
 		}
 	}
 }
 
 func (service *POHService) RunAsLeader(lastBlock *pb.POHBlock) {
+	fmt.Printf("Run as leader\n")
 	exitChan := make(chan bool)
 	defer func() { // close all channel before exit
 		exitChan <- true
@@ -75,6 +83,7 @@ func (service *POHService) RunAsLeader(lastBlock *pb.POHBlock) {
 }
 
 func (service *POHService) RunAsValidator(lastBlock *pb.POHBlock) {
+	fmt.Printf("Run as validator\n")
 	exitChan := make(chan bool)
 	defer func() { // close all channel before exit
 		exitChan <- true
@@ -157,6 +166,7 @@ func (service *POHService) CreateTick(lastTick *pb.POHTick, takeTransaction bool
 		var transactions []*pb.Transaction
 		if takeTransaction {
 			// TODO: take transaction from recorder
+			transactions = service.Recorder.TakeTransactions(config.AppConfig.TransactionPerHash)
 		}
 		hash := service.generatePOHHash(transactions, lastHash)
 		hashes = append(hashes, hash)
@@ -205,7 +215,6 @@ func (service *POHService) CreateLeaderBlock(
 
 	for totalTickGenerated < service.TickPerSlot {
 		if time.Now().UnixNano()-tickEnd < int64(1000000000/service.TickPerSecond) { //1000000000 is 1 second in nano second
-			// fmt.Printf("Skip\n")
 			time.Sleep(time.Duration((int64(1000000000/service.TickPerSecond) - (time.Now().UnixNano() - tickEnd) - 100))) // 100 is just a addition to make it not to tight
 			continue
 		}
@@ -294,7 +303,6 @@ func (service *POHService) HandleValidatorVotes(
 			if vote.Hash == leaderBlock.Hash.Hash {
 				leaderBlock.Votes = append(leaderBlock.Votes, vote)
 			}
-
 			if len(leaderBlock.Votes) >= int((math.Ceil(float64(len(service.Validators)) * (2.0 / 3.0)))) {
 				service.BroadCastVotedBlockToValidators(leaderBlock)
 				leaderBlockChan <- leaderBlock
@@ -334,7 +342,6 @@ func (service *POHService) getNodeIdx() int {
 }
 
 func (service *POHService) isLeader(lastBlock *pb.POHBlock) bool {
-	fmt.Printf("Is leader %v, %v\n", int((lastBlock.Count+1)%int64(len(service.Validators))), service.getNodeIdx())
 	return int((lastBlock.Count+1)%int64(len(service.Validators))) == service.getNodeIdx()
 }
 
@@ -342,8 +349,12 @@ func (service *POHService) isNextLeader(lastBlock *pb.POHBlock) bool {
 	return int((lastBlock.Count+1)%int64(len(service.Validators))) == service.getNodeIdx()-1
 }
 
+func (service *POHService) getCurrentLeaderIdx(lastBlock *pb.POHBlock) int {
+	return int((lastBlock.Count + 1) % int64(len(service.Validators)))
+}
+
 func (service *POHService) getCurrentLeader(lastBlock *pb.POHBlock) dataType.Validator {
-	leaderIdx := int((lastBlock.Count + 1) % int64(len(service.Validators)))
+	leaderIdx := service.getCurrentLeaderIdx(lastBlock)
 	return service.Validators[leaderIdx]
 }
 
@@ -370,5 +381,6 @@ func (service *POHService) AddValidators(validators []dataType.Validator) {
 	sort.Slice(validators, func(i, j int) bool {
 		return validators[i].Address < validators[j].Address
 	})
+
 	service.Validators = validators
 }

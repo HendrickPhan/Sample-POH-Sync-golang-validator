@@ -1,6 +1,8 @@
 package poh
 
 import (
+	"sync"
+
 	"example_poh.com/dataType"
 	pb "example_poh.com/proto"
 )
@@ -19,6 +21,7 @@ type POHRecorder struct {
 }
 
 type POHService struct {
+	mu            sync.Mutex
 	Checkpoint    *pb.POHBlock         // where new tick will start hash
 	HashStack     []*pb.POHHash        // hash stack to create tick
 	Recorder      POHRecorder          //
@@ -36,4 +39,6 @@ type POHService struct {
 	ReceiveVotedBlockChan chan *pb.POHBlock
 	ReceiveVoteChan       chan *pb.POHVote
 	LeaderIndexChan       chan int
+
+	ReceiveCheckedBlockChan chan *pb.CheckedBlock
 }

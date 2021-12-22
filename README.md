@@ -36,7 +36,7 @@ TODO: receive transactions from child
     there will be a transactionHandler go routine  
     this go routine will take data from 2 chan receiveSendTransactionChan and blockChan
     this go routine will run select to know
-    if transaction need to be add to pohRecoder or forward to next leader
+    if transaction need to be add to pohRecorder or forward to next leader
 
 
 TODO: foward transaction to next leader

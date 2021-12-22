@@ -38,7 +38,8 @@ func (server *Server) Run(handler MessageHandler) {
 		for {
 			n, _, err := ser.ReadFromUDP(p)
 			// n, remoteaddr, err := ser.ReadFromUDP(p)
-			// fmt.Printf("Read a message from %v %v \n", remoteaddr, n)
+			// fmt.Printf("Read a message from %v %v \n", remoteaddr, pendingMessage.Header)
+
 			if err != nil {
 				fmt.Printf("Some error  %v", err)
 				continue
@@ -64,6 +65,16 @@ func (server *Server) Run(handler MessageHandler) {
 				}
 			}
 
+		}
+	}()
+
+	// go routine use to update leader idx in message handler
+	go func() {
+		for {
+			leaderIdx := <-handler.LeaderIndexChan
+			handler.mu.Lock()
+			handler.LeaderIndex = leaderIdx
+			handler.mu.Unlock()
 		}
 	}()
 }

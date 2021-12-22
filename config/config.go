@@ -9,15 +9,16 @@ import (
 )
 
 type Config struct {
-	Address        string               `json:"address"`
-	Ip             string               `json:"ip"`
-	Port           int                  `json:"port"`
-	Validators     []dataType.Validator `json:"validators"`
-	HashPerSecond  int                  `json:"hash_per_second"`
-	TickPerSecond  int                  `json:"tick_per_second"`
-	TickPerSlot    int                  `json:"tick_per_slot"`
-	BlockStackSize int                  `json:"block_stack_size"`
-	TimeOutTicks   int                  `json:"time_out_ticks"` // how many tick validator should wait before create virture block
+	Address            string               `json:"address"`
+	Ip                 string               `json:"ip"`
+	Port               int                  `json:"port"`
+	Validators         []dataType.Validator `json:"validators"`
+	HashPerSecond      int                  `json:"hash_per_second"`
+	TickPerSecond      int                  `json:"tick_per_second"`
+	TickPerSlot        int                  `json:"tick_per_slot"`
+	BlockStackSize     int                  `json:"block_stack_size"`
+	TimeOutTicks       int                  `json:"time_out_ticks"` // how many tick validator should wait before create virture block
+	TransactionPerHash int                  `json:"transaction_per_hash"`
 }
 
 func loadConfig() Config {

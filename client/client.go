@@ -28,22 +28,26 @@ func (client *Client) GetWalletAddress() string {
 }
 
 func (client *Client) SendMessage(message *pb.Message) error {
+	body := append([]byte{}, message.Body...)
 	maxBodySize := 50000
-	bytesBody := []byte(message.Body)
-	totalPackage := math.Ceil(float64(len(bytesBody)) / float64(maxBodySize))
+	totalPackage := math.Ceil(float64(len(body)) / float64(maxBodySize))
 	if totalPackage == 0 {
 		totalPackage = 1
 	}
 	message.Header.TotalPackage = int32(totalPackage)
 	message.Header.Id = uuid.New().String()
-
+	conn, err := net.Dial("udp", client.GetConnectionAddress())
+	if err != nil {
+		fmt.Printf("Error when dial UDP server %v", err)
+		return err
+	}
 	for i := 0; int32(i) < message.Header.TotalPackage; i++ {
 		var sendBody []byte
-		if len(bytesBody) < maxBodySize {
-			sendBody = bytesBody
+		if len(body) < maxBodySize {
+			sendBody = body
 		} else {
-			sendBody = bytesBody[:maxBodySize]
-			bytesBody = bytesBody[maxBodySize:]
+			sendBody = body[:maxBodySize]
+			body = body[maxBodySize:]
 		}
 		sendMessage := &pb.Message{
 			Header: message.Header,
@@ -56,14 +60,9 @@ func (client *Client) SendMessage(message *pb.Message) error {
 			fmt.Printf("Error when marshal %v", err)
 			return err
 		}
-		conn, err := net.Dial("udp", client.GetConnectionAddress())
-		if err != nil {
-			fmt.Printf("Error when dial UDP server %v", err)
-			return err
-		}
 		conn.Write(b)
-		conn.Close()
 	}
+	conn.Close()
 
 	return nil
 }
@@ -124,6 +123,23 @@ func (client *Client) SendVotedBlock(block *pb.POHBlock) {
 			Type:    "request",
 			From:    config.AppConfig.Address,
 			Command: "VotedBlock",
+		},
+		Body: protoRs,
+	}
+
+	err := client.SendMessage(message)
+	if err != nil {
+		fmt.Printf("Error when send started %v", err)
+	}
+}
+
+func (client *Client) SendCheckedBlock(block *pb.CheckedBlock) {
+	protoRs, _ := proto.Marshal(block)
+	message := &pb.Message{
+		Header: &pb.Header{
+			Type:    "request",
+			From:    config.AppConfig.Address,
+			Command: "SendCheckedBlock",
 		},
 		Body: protoRs,
 	}

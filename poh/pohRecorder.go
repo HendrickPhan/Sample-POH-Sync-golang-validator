@@ -1,8 +1,6 @@
 package poh
 
 import (
-	"fmt"
-
 	"example_poh.com/config"
 	pb "example_poh.com/proto"
 )
@@ -16,7 +14,6 @@ func (recorder *POHRecorder) AddBlock(block *pb.POHBlock) {
 	branchIdx := recorder.findBranchIdxForNewBlock(block)
 	if branchIdx >= 0 {
 		if int64(len(recorder.Branches[branchIdx].Blocks)) > block.Count-recorder.StartBlockCount {
-			fmt.Printf("Here 1")
 			// mean already have block with same count in this branch
 			// so we have to fork (create new branch with same previous data for this block)
 			// get previos blocks
@@ -104,4 +101,17 @@ func (recorder *POHRecorder) removeOldBlockFromBranches() {
 			recorder.Branches[i].Blocks = recorder.Branches[i].Blocks[totalRemovableBlock:]
 		}
 	}
+}
+
+func (recorder *POHRecorder) AddTransactionFromCheckedBlock(checkedBlock *pb.CheckedBlock) {
+	recorder.Transactions = append(recorder.Transactions, checkedBlock.Transactions...)
+}
+
+func (recorder *POHRecorder) TakeTransactions(n int) []*pb.Transaction {
+	if n > len(recorder.Transactions) {
+		n = len(recorder.Transactions)
+	}
+	rs := recorder.Transactions[:n]
+	recorder.Transactions = recorder.Transactions[n:]
+	return rs
 }
