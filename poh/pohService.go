@@ -3,16 +3,17 @@ package poh
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"math"
 	"sort"
 	"strconv"
 	"time"
 
-	"example_poh.com/client"
 	"example_poh.com/config"
 	"example_poh.com/dataType"
 	pb "example_poh.com/proto"
+	log "github.com/sirupsen/logrus"
 )
 
 func (service *POHService) Run() {
@@ -28,6 +29,8 @@ func (service *POHService) Run() {
 		}
 	}()
 
+	go service.ReceiveTickFromNextLeaderTickChan()
+
 	for {
 		lastBlock := <-service.BlockChan
 		// send leader index to this chan so message handler know what to do with incomming transactions
@@ -36,6 +39,9 @@ func (service *POHService) Run() {
 		// add to recorder to update poh block history
 		fmt.Printf("Last block count: %v, type: %v\n", lastBlock.Count, lastBlock.Type)
 		service.Recorder.AddBlock(lastBlock)
+		if len(service.Recorder.Branches) > 0 {
+			fmt.Printf("Branch total transaction: %v\n", service.Recorder.Branches[service.Recorder.MainBranchIdx].TotalTransaction)
+		}
 		// get main branch last block to start working on
 		mainBranchLastBlock := service.Recorder.GetMainBranchLastBlock()
 
@@ -61,7 +67,7 @@ func (service *POHService) RunAsLeader(lastBlock *pb.POHBlock) {
 	go service.CreateLeaderBlock(lastBlock, leaderBlockChan, exitChan)
 	var virtualBlock *pb.POHBlock
 	var leaderBlock *pb.POHBlock
-	tickTime := 1000000000 / service.TickPerSecond
+	tickTime := int(time.Second) / service.TickPerSecond
 	timeOut := time.Now().UnixNano() + int64(tickTime*(service.TickPerSlot+service.TimeOutTicks))
 	for {
 		select {
@@ -94,7 +100,7 @@ func (service *POHService) RunAsValidator(lastBlock *pb.POHBlock) {
 	go service.CreateVirtualBlock(lastBlock, virtualBlockChan)
 	go service.HandleLeaderTick(lastBlock, leaderBlockChan, exitChan)
 	var virtualBlock *pb.POHBlock
-	tickTime := 1000000000 / service.TickPerSecond
+	tickTime := int(time.Second) / service.TickPerSecond
 	timeOut := time.Now().UnixNano() + int64(tickTime*(service.TickPerSlot+service.TimeOutTicks))
 	for {
 		select {
@@ -143,15 +149,9 @@ func (service *POHService) CreateLeaderTick(lastTick *pb.POHTick) *pb.POHTick {
 }
 
 func (service *POHService) broadCastLeaderTick(tick *pb.POHTick) {
-	for _, v := range service.Validators {
+	for _, v := range service.Server.MessageHandler.ValidatorConnections {
 		if v.Address != config.AppConfig.Address {
-			client := client.Client{
-				Address: v.Address,
-				IP:      v.Ip,
-				Port:    v.Port,
-			}
-
-			client.SendLeaderTick(tick)
+			v.SendLeaderTick(tick)
 		}
 	}
 }
@@ -220,7 +220,7 @@ func (service *POHService) CreateLeaderBlock(
 		}
 
 		tick := service.CreateLeaderTick(lastTick)
-		service.broadCastLeaderTick(tick)
+		go service.broadCastLeaderTick(tick)
 		ticks = append(ticks, tick)
 		lastTick = tick
 		totalTickGenerated++
@@ -237,6 +237,163 @@ func (service *POHService) CreateLeaderBlock(
 	}
 }
 
+func (service *POHService) validateLeaderTick(lastTick *pb.POHTick, tick *pb.POHTick) error {
+	if lastTick.Count+1 != tick.Count {
+		// panic(fmt.Sprintf("invalid tick count %v, %v", lastTick.Count+1, tick.Count))
+
+		return fmt.Errorf("invalid tick count %v, %v", lastTick.Count+1, tick.Count)
+	}
+	if lastTick.Hashes[len(lastTick.Hashes)-1].Hash != tick.Hashes[0].LastHash {
+		return fmt.Errorf("invalid tick hash %v, %v", lastTick.Hashes[len(lastTick.Hashes)-1].Hash, tick.Hashes[0].LastHash)
+	}
+	// validate POH in tick
+	validatePOHChan := make(chan bool)
+	exitChan := make(chan bool)
+
+	for i := 0; i < config.AppConfig.NumberOfValidatePohRoutine; i++ {
+		hashPerTick := service.HashPerSecond / service.TickPerSecond
+		hashNeedValidatePerRoutine := int(math.Ceil(float64(hashPerTick) / float64(config.AppConfig.NumberOfValidatePohRoutine))) // ceil to not miss any transaction
+		go func(i int) {
+			validateFromIdx := i*hashNeedValidatePerRoutine - 1
+			if validateFromIdx < 0 {
+				validateFromIdx = 0
+			}
+			validateToIdx := (i + 1) * hashNeedValidatePerRoutine
+			hashNeedValidate := tick.Hashes[validateFromIdx:validateToIdx]
+			for i := 1; i < len(hashNeedValidate); i++ {
+				select {
+				case <-exitChan:
+					return
+				default:
+					rightHash := service.generatePOHHash(hashNeedValidate[i].Transactions, hashNeedValidate[i-1])
+					if rightHash.Hash != hashNeedValidate[i].Hash {
+						validatePOHChan <- false
+						return
+					}
+				}
+			}
+			validatePOHChan <- true
+		}(i)
+	}
+	totalValidRoutine := 0
+	for {
+		valid := <-validatePOHChan
+		if !valid {
+			<-exitChan
+			return errors.New("invalid poh")
+		} else {
+			totalValidRoutine++
+		}
+		if totalValidRoutine == config.AppConfig.NumberOfValidatePohRoutine {
+			return nil
+		}
+
+	}
+	// TODO: send to child to validate
+}
+
+func (service *POHService) isFutureTick(tick *pb.POHTick, ticks []*pb.POHTick, lastBlock *pb.POHBlock) bool {
+	isFutureTick := false
+	if len(ticks) > 0 {
+		if tick.Count > ticks[len(ticks)-1].Count+1 {
+			isFutureTick = true
+		}
+	} else {
+		if tick.Count > lastBlock.Ticks[len(lastBlock.Ticks)-1].Count+1 {
+			isFutureTick = true
+		}
+	}
+	return isFutureTick
+}
+
+func (service *POHService) addFutureLeaderTick(futureTicks *[]*pb.POHTick, tick *pb.POHTick) {
+	fmt.Printf("addFutureLeaderTick\n")
+	*futureTicks = append(*futureTicks, tick)
+	sort.Slice(*futureTicks, func(i, j int) bool {
+		return (*futureTicks)[i].Count < (*futureTicks)[j].Count
+	})
+}
+
+func (service *POHService) checkFutureLeaderTicks(futureTicks *[]*pb.POHTick, ticks *[]*pb.POHTick) {
+	for {
+		if len(*futureTicks) == 0 {
+			return
+		}
+		tick := (*ticks)[len((*ticks))-1]
+		if (*futureTicks)[0].Count == tick.Count+1 {
+			err := service.validateLeaderTick(tick, (*futureTicks)[0])
+			if err != nil {
+				fmt.Printf("Error when validate leader tick: %v\n", err)
+			} else {
+				tick := (*futureTicks)[0]
+				*ticks = append(*ticks, tick)
+			}
+			*futureTicks = (*futureTicks)[1:]
+		} else {
+			return
+		}
+	}
+}
+
+func (service *POHService) ReceiveTickFromNextLeaderTickChan() {
+	for {
+		tick := <-service.ReceiveNextLeaderTickChan
+		service.mu.Lock()
+		service.NextLeaderTicks = append(service.NextLeaderTicks, tick)
+		service.mu.Unlock()
+
+	}
+
+}
+
+func (service *POHService) HandleTicksInNextLeaderTicks(
+	ticks *[]*pb.POHTick,
+	lastBlock *pb.POHBlock,
+	futureTicks *[]*pb.POHTick,
+	totalTickGenerated *int,
+) {
+	for _, tick := range service.NextLeaderTicks {
+		service.addTickToListLeaderTick(
+			tick,
+			ticks,
+			lastBlock,
+			futureTicks,
+			totalTickGenerated,
+		)
+	}
+	service.mu.Lock()
+	service.NextLeaderTicks = []*pb.POHTick{}
+	service.mu.Unlock()
+}
+
+func (service *POHService) addTickToListLeaderTick(
+	tick *pb.POHTick,
+	ticks *[]*pb.POHTick,
+	lastBlock *pb.POHBlock,
+	futureTicks *[]*pb.POHTick,
+	totalTickGenerated *int,
+) {
+	*totalTickGenerated++
+	if service.isFutureTick(tick, *ticks, lastBlock) {
+		service.addFutureLeaderTick(futureTicks, tick)
+		fmt.Printf("futureTicks %v \n", (*futureTicks)[0].Count)
+		return
+	}
+	var err error
+	if len(*ticks) > 0 { // if first tick then last tick is last tick of last block
+		err = service.validateLeaderTick((*ticks)[len(*ticks)-1], tick)
+	} else {
+		err = service.validateLeaderTick(lastBlock.Ticks[len(lastBlock.Ticks)-1], tick)
+	}
+	if err != nil {
+		fmt.Printf("Error when validate leader tick: %v\n", err)
+		return
+	}
+	// TODO: handle casse that tick not come in order e.x: tick 2 come, then tick 1 come
+	*ticks = append(*ticks, tick)
+	service.checkFutureLeaderTicks(futureTicks, ticks)
+}
+
 func (service *POHService) HandleLeaderTick(
 	lastBlock *pb.POHBlock,
 	leaderBlockChan chan *pb.POHBlock,
@@ -244,13 +401,29 @@ func (service *POHService) HandleLeaderTick(
 	// This function use to handle tick data from leader
 	totalTickGenerated := 0
 	var ticks []*pb.POHTick
+	var futureTicks []*pb.POHTick
+	var tick *pb.POHTick
+
+	// handle leader ticks
 	for totalTickGenerated < service.TickPerSlot-1 {
+		// handle tick received from next leader before confirmed block
+		service.HandleTicksInNextLeaderTicks(
+			&ticks,
+			lastBlock,
+			&futureTicks,
+			&totalTickGenerated,
+		)
+
 		// append tick to create vote block
-		tick := <-service.ReceiveLeaderTickChan
-		// TODO: validate tick data ex: does transaction valid, does tick come from leader, does tick last hash exist, v.v
-		// TODO: handle casse that tick not come in order e.x: tick 2 come, then tick 1 come
-		ticks = append(ticks, tick)
-		totalTickGenerated++
+		tick = <-service.ReceiveLeaderTickChan
+		// fmt.Printf("receive tick count %v\n", tick.Count)
+		service.addTickToListLeaderTick(
+			tick,
+			&ticks,
+			lastBlock,
+			&futureTicks,
+			&totalTickGenerated,
+		)
 	}
 
 	// create vote and send to leader
@@ -263,31 +436,30 @@ func (service *POHService) HandleLeaderTick(
 	}
 	// send vote to leader
 	service.SendVoteToLeader(lastBlock, vote)
-	go service.HandleVoteResult(voteBlock, service.ReceiveVotedBlockChan, leaderBlockChan, exitChan)
+	go service.HandleVoteResult(voteBlock, leaderBlockChan, exitChan)
 }
 
 func (service *POHService) SendVoteToLeader(lastBLock *pb.POHBlock, vote *pb.POHVote) {
 	leader := service.getCurrentLeader(lastBLock)
-	client := client.Client{
-		Address: leader.Address,
-		IP:      leader.Ip,
-		Port:    leader.Port,
+	if leaderConn, ok := service.Server.MessageHandler.ValidatorConnections[leader.Address]; ok {
+		leaderConn.SendVoteLeaderBlock(vote)
+	} else {
+		log.Error("Not found leader connection to send vote")
 	}
-
-	client.SendVoteLeaderBlock(vote)
 }
 
 func (service *POHService) HandleVoteResult(
 	voteBlock *pb.POHBlock,
-	receiveVotedBlockChan chan *pb.POHBlock,
 	leaderBlockChan chan *pb.POHBlock,
 	exitChan chan bool,
 ) {
 	// This function use to handle voted block data from leader
 	select {
-	case block := <-receiveVotedBlockChan:
-		// TODO: Validate data in block ex: enough sign of orther validator
-		leaderBlockChan <- block
+	case voteResult := <-service.ReceiveVoteResultChan:
+		// TODO: validate sign in vote result
+		if voteResult.Hash == voteBlock.Hash.Hash {
+			leaderBlockChan <- voteBlock
+		}
 	case <-exitChan:
 		return
 	}
@@ -304,7 +476,7 @@ func (service *POHService) HandleValidatorVotes(
 				leaderBlock.Votes = append(leaderBlock.Votes, vote)
 			}
 			if len(leaderBlock.Votes) >= int((math.Ceil(float64(len(service.Validators)) * (2.0 / 3.0)))) {
-				service.BroadCastVotedBlockToValidators(leaderBlock)
+				service.BroadCastVoteResultToValidators(leaderBlock)
 				leaderBlockChan <- leaderBlock
 				return
 			}
@@ -316,16 +488,14 @@ func (service *POHService) HandleValidatorVotes(
 	}
 }
 
-func (service *POHService) BroadCastVotedBlockToValidators(votedBlock *pb.POHBlock) {
-	for _, v := range service.Validators {
+func (service *POHService) BroadCastVoteResultToValidators(votedBlock *pb.POHBlock) {
+	voteResult := &pb.POHVoteResult{
+		Hash:  votedBlock.Hash.Hash,
+		Votes: votedBlock.Votes,
+	}
+	for _, v := range service.Server.MessageHandler.ValidatorConnections {
 		if v.Address != config.AppConfig.Address {
-			client := client.Client{
-				Address: v.Address,
-				IP:      v.Ip,
-				Port:    v.Port,
-			}
-
-			client.SendVotedBlock(votedBlock)
+			v.SendVoteResult(voteResult)
 		}
 	}
 }

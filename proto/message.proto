@@ -17,3 +17,7 @@ message Message {
     Header Header = 1;
     bytes body = 2;
 }
+
+message InitConnection {
+    string Address = 1;
+}

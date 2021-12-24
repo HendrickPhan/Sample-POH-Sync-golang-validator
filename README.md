@@ -29,17 +29,6 @@ when validator receive transaction it will forward it to next leader
 when validator receive tick from leader it will send to miner to check
 
 
-
-TODO: receive transactions from child
-    transactions will be send to server via message sendTransactions  
-    messageHandler will add transaction to a receiveSendTransactionChan  
-    there will be a transactionHandler go routine  
-    this go routine will take data from 2 chan receiveSendTransactionChan and blockChan
-    this go routine will run select to know
-    if transaction need to be add to pohRecorder or forward to next leader
-
-
-TODO: foward transaction to next leader
 TODO: send tick to child
 TODO: receive tick validate result from child
 TODO: update data storage, save snap shot
@@ -54,14 +43,12 @@ TODO: broadcast confrim block to child
 TODO: send sync data to child
 
 
-TODO: take transaction from recorder
 TODO:  validate data in HandleVoteResult
 TODO: validate POH  
 TODO: sync data before run POH
 
 TODO: update base on greedy transaction fee
 TODO: handle case no block were valid when receive vote leader??
-
 
 Flow of validator
 
@@ -71,3 +58,10 @@ Flow of validator
 
 # Build proto  
 `protoc --go_out=. ./proto/*.proto`  
+
+
+nhận được tick từ leader mới trước khi nhận được voted result từ leader cũ
+?? how to solve this
+wait a bit for orther node receive voted result befor send tick
+
+add tick to next leader tick chan, and

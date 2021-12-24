@@ -3,9 +3,9 @@
     "ip": "127.0.0.1",
     "port": 3004,
     "transaction_per_hash": 10,
-    "hash_per_second": 1000,
+    "hash_per_second": 2000,
     "tick_per_second": 100,
-    "tick_per_slot": 50,
+    "tick_per_slot": 25,
     "time_out_ticks": 20,
     "block_stack_size": 32,
     "validators": [
@@ -24,5 +24,6 @@
             "ip": "127.0.0.1",
             "port": 3003
         }
-    ]
+    ],
+    "number_of_validate_poh_routine": 5
 }
