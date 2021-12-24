@@ -58,3 +58,10 @@ Flow of validator
 
 # Build proto  
 `protoc --go_out=. ./proto/*.proto`  
+
+
+nhận được tick từ leader mới trước khi nhận được voted result từ leader cũ
+?? how to solve this
+wait a bit for orther node receive voted result befor send tick
+
+add tick to next leader tick chan, and

@@ -29,3 +29,9 @@ message POHVote {
     string Address = 2;
     string Sign = 3;
 }
+
+
+message POHVoteResult {
+    string Hash = 1;
+    repeated POHVote Votes = 2; 
+}

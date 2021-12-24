@@ -4,6 +4,7 @@ import (
 	"sync"
 
 	"example_poh.com/dataType"
+	"example_poh.com/network"
 	pb "example_poh.com/proto"
 )
 
@@ -22,6 +23,7 @@ type POHRecorder struct {
 
 type POHService struct {
 	mu            sync.Mutex
+	Server        *network.Server
 	Checkpoint    *pb.POHBlock         // where new tick will start hash
 	HashStack     []*pb.POHHash        // hash stack to create tick
 	Recorder      POHRecorder          //
@@ -36,9 +38,12 @@ type POHService struct {
 
 	BlockChan             chan *pb.POHBlock
 	ReceiveLeaderTickChan chan *pb.POHTick
-	ReceiveVotedBlockChan chan *pb.POHBlock
 	ReceiveVoteChan       chan *pb.POHVote
+	ReceiveVoteResultChan chan *pb.POHVoteResult
 	LeaderIndexChan       chan int
 
 	ReceiveCheckedBlockChan chan *pb.CheckedBlock
+
+	NextLeaderTicks           []*pb.POHTick
+	ReceiveNextLeaderTickChan <-chan *pb.POHTick
 }

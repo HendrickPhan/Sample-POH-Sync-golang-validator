@@ -7,7 +7,7 @@ import (
 
 func (recorder *POHRecorder) AddBlock(block *pb.POHBlock) {
 	if block.Count < recorder.StartBlockCount {
-		// skip block not in count range. May skip to far in future block?
+		// skip block not in count range. May skip too far in future block?
 		return
 	}
 
