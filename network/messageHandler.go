@@ -15,6 +15,7 @@ import (
 )
 
 type MessageHandler struct {
+	Ready                 bool
 	InitedConnectionsChan chan *Connection
 	RemoveConnectionChan  chan *Connection
 	ValidatorConnections  map[string]*Connection // map address to validator connection
@@ -127,13 +128,13 @@ func (handler *MessageHandler) handleInitConnectionMessage(conn *Connection, mes
 	if conn.Type == "Validator" {
 		// TODO: should have node type in init connection to add connect to right list ex: validator, node, miner
 		handler.ValidatorConnections[conn.Address] = conn
-		if len(handler.ValidatorConnections) == len(config.AppConfig.Validators) {
-			handler.StartPOHChan <- true
-
-		}
 	}
 	if conn.Type == "Node" {
 		handler.NodeConnections[conn.Address] = conn
+	}
+
+	if len(handler.ValidatorConnections) == len(config.AppConfig.Validators) && len(handler.NodeConnections) > 0 {
+		handler.StartPOHChan <- true
 	}
 
 	log.Infof("Receive InitConnection from %v type %v\n", conn.TCPConnection.RemoteAddr(), conn.Type)

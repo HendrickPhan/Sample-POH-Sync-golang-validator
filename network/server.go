@@ -17,10 +17,11 @@ type Server struct {
 	InitedConnectionsChan chan *Connection
 	RemoveConnectionChan  chan *Connection
 
-	UnInitedConnections  []*Connection
-	InitedConnections    map[string]*Connection
-	ValidatorConnections map[string]*Connection
-	NodeConnections      map[string]*Connection
+	UnInitedConnections          []*Connection
+	InitedConnections            map[string]*Connection
+	UnInitedValidatorConnections []*Connection
+	ValidatorConnections         map[string]*Connection
+	NodeConnections              map[string]*Connection
 }
 
 func (server *Server) Run(validatorConnections []*Connection) {
@@ -29,11 +30,13 @@ func (server *Server) Run(validatorConnections []*Connection) {
 	if err != nil {
 		log.Error(err)
 	}
+	// TODO: move this out
+	server.UnInitedValidatorConnections = validatorConnections
+
 	defer listener.Close()
 
 	go server.handleInitedConnectionChan()
 	go server.handleRemoveConnectionChan()
-	go server.ConnectToServers(validatorConnections)
 	go server.MessageHandler.UpdateLeaderIdx()
 
 	for {
@@ -54,7 +57,9 @@ func (server *Server) handleInitedConnectionChan() {
 	for {
 		con := <-server.InitedConnectionsChan
 		if con.Type == "Node" {
-			log.Infof("Node connected %v \n", con.Address)
+			if len(server.NodeConnections) == 0 {
+				go server.ConnectToServers()
+			}
 			server.NodeConnections[con.Address] = con
 		}
 		if con.Type == "Validator" {
@@ -87,27 +92,22 @@ func (server *Server) handleRemoveConnectionChan() {
 	}
 }
 
-func (server *Server) ConnectToServers(connections []*Connection) {
-	for {
-		if len(server.NodeConnections) > 0 { // w8 till have node connected before connect to orther validator
-			log.Infof("Connecting to orther validator")
-			for i, v := range connections {
-				if _, ok := server.ValidatorConnections[v.Address]; ok {
-					// already connected
-					log.Info("Already inited")
-					continue
-				}
+func (server *Server) ConnectToServers() {
+	log.Info("Connect to servers")
+	for i, v := range server.UnInitedValidatorConnections {
+		if _, ok := server.ValidatorConnections[v.Address]; ok {
+			// already connected
+			log.Info("Already inited")
+			continue
+		}
 
-				conn, err := net.Dial("tcp", fmt.Sprintf("%v:%v", v.IP, v.Port))
-				if err != nil {
-					log.Warn("Error when connect to %v:%v, wallet adress : %v", err)
-				} else {
-					connections[i].TCPConnection = conn
-					server.MessageHandler.OnConnect(connections[i])
-					go server.MessageHandler.HandleConnection(connections[i])
-				}
-			}
-			return
+		conn, err := net.Dial("tcp", fmt.Sprintf("%v:%v", v.IP, v.Port))
+		if err != nil {
+			log.Warn("Error when connect to %v:%v, wallet adress : %v", err)
+		} else {
+			server.UnInitedValidatorConnections[i].TCPConnection = conn
+			server.MessageHandler.OnConnect(server.UnInitedValidatorConnections[i])
+			go server.MessageHandler.HandleConnection(server.UnInitedValidatorConnections[i])
 		}
 	}
 }
