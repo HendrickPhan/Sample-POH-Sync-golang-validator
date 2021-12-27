@@ -138,9 +138,8 @@ func (handler *MessageHandler) handleInitConnectionMessage(conn *Connection, mes
 	}
 
 	log.Infof("Receive InitConnection from %v type %v\n", conn.TCPConnection.RemoteAddr(), conn.Type)
-	go func() {
-		handler.InitedConnectionsChan <- conn
-	}()
+
+	handler.InitedConnectionsChan <- conn
 
 	handler.mu.Unlock()
 }
