@@ -12,10 +12,11 @@ import (
 )
 
 type Connection struct {
-	Address       string `json:"address"`
-	IP            string `json:"ip"`
-	Port          int    `json:"port"`
+	Address       string
+	IP            string
+	Port          int
 	TCPConnection net.Conn
+	Type          string
 	mu            sync.Mutex
 }
 
@@ -38,6 +39,7 @@ func (conn *Connection) SendMessage(message *pb.Message) error {
 func (conn *Connection) SendInitConnection() {
 	protoRs, _ := proto.Marshal(&pb.InitConnection{
 		Address: config.AppConfig.Address,
+		Type:    config.AppConfig.NodeType,
 	})
 	message := &pb.Message{
 		Header: &pb.Header{
@@ -127,6 +129,23 @@ func (conn *Connection) SendCheckedBlock(block *pb.CheckedBlock) {
 			Type:    "request",
 			From:    config.AppConfig.Address,
 			Command: "SendCheckedBlock",
+		},
+		Body: protoRs,
+	}
+
+	err := conn.SendMessage(message)
+	if err != nil {
+		fmt.Printf("Error when send started %v", err)
+	}
+}
+
+func (conn *Connection) SendConfirmResult(confirmResult *pb.POHConfirmResult) {
+	protoRs, _ := proto.Marshal(confirmResult)
+	message := &pb.Message{
+		Header: &pb.Header{
+			Type:    "request",
+			From:    config.AppConfig.Address,
+			Command: "ConfirmResult",
 		},
 		Body: protoRs,
 	}

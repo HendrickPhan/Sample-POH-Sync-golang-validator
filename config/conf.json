@@ -2,6 +2,7 @@
     "address": "address1",
     "ip": "127.0.0.1",
     "port": 3001,
+    "node_type": "Validator",
     "hash_per_second": 1600,
     "transaction_per_hash": 10,
     "tick_per_second": 160,
@@ -30,5 +31,6 @@
             "port": 3004
         }
     ],
-    "number_of_validate_poh_routine": 10
+    "number_of_validate_poh_routine": 10,
+    "account_db_path": "./db/account"
 }

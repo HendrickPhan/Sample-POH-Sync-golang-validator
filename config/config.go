@@ -12,6 +12,7 @@ type Config struct {
 	Address                    string               `json:"address"`
 	Ip                         string               `json:"ip"`
 	Port                       int                  `json:"port"`
+	NodeType                   string               `json:"node_type"`
 	Validators                 []dataType.Validator `json:"validators"`
 	HashPerSecond              int                  `json:"hash_per_second"`
 	TickPerSecond              int                  `json:"tick_per_second"`
@@ -20,6 +21,7 @@ type Config struct {
 	TimeOutTicks               int                  `json:"time_out_ticks"` // how many tick validator should wait before create virture block
 	TransactionPerHash         int                  `json:"transaction_per_hash"`
 	NumberOfValidatePohRoutine int                  `json:"number_of_validate_poh_routine"`
+	AccountDBPath              string               `json:"account_db_path"`
 }
 
 func loadConfig() Config {

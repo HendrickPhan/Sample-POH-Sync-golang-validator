@@ -6,6 +6,7 @@ import (
 	"example_poh.com/dataType"
 	"example_poh.com/network"
 	pb "example_poh.com/proto"
+	"github.com/syndtr/goleveldb/leveldb"
 )
 
 type POHBranch struct {
@@ -24,8 +25,8 @@ type POHRecorder struct {
 type POHService struct {
 	mu            sync.Mutex
 	Server        *network.Server
+	AccountDB     *leveldb.DB
 	Checkpoint    *pb.POHBlock         // where new tick will start hash
-	HashStack     []*pb.POHHash        // hash stack to create tick
 	Recorder      POHRecorder          //
 	Validators    []dataType.Validator // list validator to communicate, choose leader
 	LeaderIndex   int                  // idx of leader in Validators
@@ -36,14 +37,20 @@ type POHService struct {
 	TickStart     int64 //
 	TickEnd       int64 // use to throttle tick speed
 
-	BlockChan             chan *pb.POHBlock
-	ReceiveLeaderTickChan chan *pb.POHTick
-	ReceiveVoteChan       chan *pb.POHVote
-	ReceiveVoteResultChan chan *pb.POHVoteResult
-	LeaderIndexChan       chan int
+	BlockChan                     chan *pb.POHBlock
+	ReceiveLeaderTickChan         chan *pb.POHTick
+	ReceiveVoteChan               chan *pb.POHVote
+	ReceiveVoteResultChan         chan *pb.POHVoteResult
+	ReceiveValidateTickResultChan chan *pb.POHValidateTickResult
+	LeaderIndexChan               chan int
 
 	ReceiveCheckedBlockChan chan *pb.CheckedBlock
 
 	NextLeaderTicks           []*pb.POHTick
 	ReceiveNextLeaderTickChan <-chan *pb.POHTick
+}
+
+type POHValidTickSigns struct {
+	Tick  *pb.POHTick
+	Signs map[string]string
 }

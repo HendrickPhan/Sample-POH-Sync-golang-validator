@@ -20,4 +20,5 @@ message Message {
 
 message InitConnection {
     string Address = 1;
+    string Type = 2;
 }

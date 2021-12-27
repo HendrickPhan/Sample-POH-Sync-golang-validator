@@ -2,10 +2,11 @@
     "address": "address3",
     "ip": "127.0.0.1",
     "port": 3003,
+    "node_type": "Validator",
     "transaction_per_hash": 10,
-    "hash_per_second": 2000,
-    "tick_per_second": 100,
-    "tick_per_slot": 25,
+    "hash_per_second": 100,
+    "tick_per_second": 50,
+    "tick_per_slot": 50,
     "time_out_ticks": 20,
     "block_stack_size": 32,
     "validators": [
@@ -25,5 +26,6 @@
             "port": 3004
         }
     ],
-    "number_of_validate_poh_routine": 5
+    "number_of_validate_poh_routine": 5,
+    "account_db_path": "./db/account"
 }
