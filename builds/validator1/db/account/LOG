@@ -1066,3 +1066,40 @@
 17:44:44.832082 version@stat F·[3 1] S·791B[669B 122B] Sc·[0.75 0.00]
 17:44:44.942025 db@janitor F·6 G·0
 17:44:44.942111 db@open done T·111.786016ms
+=============== Dec 28, 2021 (+07) ===============
+10:38:32.269830 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+10:38:32.290331 version@stat F·[3 1] S·791B[669B 122B] Sc·[0.75 0.00]
+10:38:32.290373 db@open opening
+10:38:32.290478 journal@recovery F·1
+10:38:32.291222 journal@recovery recovering @247
+10:38:32.350806 memdb@flush created L0@249 N·5 S·144B "From,v22513":"From,v22509"
+10:38:32.351392 version@stat F·[4 1] S·935B[813B 122B] Sc·[1.00 0.00]
+10:38:32.452683 db@janitor F·7 G·0
+10:38:32.452741 db@open done T·162.337591ms
+10:38:32.452853 table@compaction L0·4 -> L1·1 S·935B Q·22514
+10:38:32.519192 table@build created L1@252 N·1 S·122B "From,v22513":"From,v22513"
+10:38:32.519299 version@stat F·[0 1] S·122B[0B 122B] Sc·[0.00 0.00]
+10:38:32.563827 table@compaction committed F-4 S-813B Ke·0 D·63 T·110.909885ms
+10:38:32.563990 table@remove removed @249
+10:38:32.564065 table@remove removed @242
+10:38:32.564140 table@remove removed @237
+10:38:32.564206 table@remove removed @228
+10:38:32.564277 table@remove removed @223
+=============== Dec 28, 2021 (+07) ===============
+10:50:32.197046 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+10:50:32.197309 version@stat F·[0 1] S·122B[0B 122B] Sc·[0.00 0.00]
+10:50:32.197336 db@open opening
+10:50:32.197404 journal@recovery F·1
+10:50:32.198860 journal@recovery recovering @250
+10:50:32.199653 version@stat F·[0 1] S·122B[0B 122B] Sc·[0.00 0.00]
+10:50:32.305295 db@janitor F·3 G·0
+10:50:32.305376 db@open done T·108.006776ms
+=============== Dec 28, 2021 (+07) ===============
+10:51:41.672133 log@legend F·NumFile S·FileSize N·Entry C·BadEntry B·BadBlock Ke·KeyError D·DroppedEntry L·Level Q·SeqNum T·TimeElapsed
+10:51:41.672557 version@stat F·[0 1] S·122B[0B 122B] Sc·[0.00 0.00]
+10:51:41.672585 db@open opening
+10:51:41.672663 journal@recovery F·1
+10:51:41.673476 journal@recovery recovering @253
+10:51:41.674574 version@stat F·[0 1] S·122B[0B 122B] Sc·[0.00 0.00]
+10:51:41.800400 db@janitor F·3 G·0
+10:51:41.800476 db@open done T·127.858887ms

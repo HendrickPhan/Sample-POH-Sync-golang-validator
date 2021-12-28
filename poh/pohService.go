@@ -71,6 +71,10 @@ func (service *POHService) RunAsLeader(lastBlock *pb.POHBlock) {
 	var leaderBlock *pb.POHBlock
 	tickTime := int(time.Second) / service.TickPerSecond
 	timeOut := time.Now().UnixNano() + int64(tickTime*(service.TickPerSlot+service.TimeOutTicks))
+	if lastBlock.Count == 1 {
+		// temporary fix for warmup leader when start POH
+		timeOut += 1000 * int64(tickTime*(service.TickPerSlot+service.TimeOutTicks))
+	}
 	for {
 		select {
 		case virtual := <-virtualBlockChan:
@@ -105,6 +109,10 @@ func (service *POHService) RunAsValidator(lastBlock *pb.POHBlock) {
 	var virtualBlock *pb.POHBlock
 	tickTime := int(time.Second) / service.TickPerSecond
 	timeOut := time.Now().UnixNano() + int64(tickTime*(service.TickPerSlot+service.TimeOutTicks))
+	if lastBlock.Count == 1 {
+		// temporary fix for warmup leader when start POH
+		timeOut += 1000 * int64(tickTime*(service.TickPerSlot+service.TimeOutTicks))
+	}
 	for {
 		select {
 		case virtual := <-virtualBlockChan:
