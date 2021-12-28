@@ -160,7 +160,7 @@ func (service *POHService) CreateLeaderTick(lastTick *pb.POHTick) *pb.POHTick {
 }
 
 func (service *POHService) broadCastLeaderTick(tick *pb.POHTick) {
-	for _, v := range service.Server.MessageHandler.ValidatorConnections {
+	for _, v := range service.Connections.ValidatorConnections {
 		if v.Address != config.AppConfig.Address {
 			v.SendLeaderTick(tick)
 		}
@@ -250,7 +250,7 @@ func (service *POHService) CreateLeaderBlock(
 
 func (service *POHService) SendVoteToLeader(lastBLock *pb.POHBlock, vote *pb.POHVote) {
 	leader := service.getCurrentLeader(lastBLock)
-	if leaderConn, ok := service.Server.MessageHandler.ValidatorConnections[leader.Address]; ok {
+	if leaderConn, ok := service.Connections.ValidatorConnections[leader.Address]; ok {
 		leaderConn.SendVoteLeaderBlock(vote)
 	} else {
 		log.Error("Not found leader connection to send vote")
@@ -303,7 +303,7 @@ func (service *POHService) BroadCastVoteResultToValidators(votedBlock *pb.POHBlo
 		Hash:  votedBlock.Hash.Hash,
 		Votes: votedBlock.Votes,
 	}
-	for _, v := range service.Server.MessageHandler.ValidatorConnections {
+	for _, v := range service.Connections.ValidatorConnections {
 		if v.Address != config.AppConfig.Address {
 			v.SendVoteResult(voteResult)
 		}
@@ -365,7 +365,7 @@ func (service *POHService) AddValidators(validators []dataType.Validator) {
 }
 
 func (service *POHService) BroadCastTickToChildrenNodes(tick *pb.POHTick, merkelRoot string) {
-	for _, nodeConnections := range service.Server.NodeConnections {
+	for _, nodeConnections := range service.Connections.NodeConnections {
 		go nodeConnections.SendLeaderTick(tick)
 	}
 }
@@ -392,7 +392,7 @@ func (service *POHService) HandleValidateTickResultFromChildrenNode(lastBlock *p
 					}
 				}
 
-				if len(validTickSigns[tickHash].Signs) >= int(math.Ceil(float64(2.0/3.0)*float64(len(service.Server.NodeConnections)))) {
+				if len(validTickSigns[tickHash].Signs) >= int(math.Ceil(float64(2.0/3.0)*float64(len(service.Connections.NodeConnections)))) {
 					validTicks = append(validTicks, validTickSigns[tickHash].Tick)
 				}
 			}
@@ -456,7 +456,7 @@ func (service *POHService) BroadCastConfirmResultToChildrens(accountDatas []*pb.
 		AccountDatas: accountDatas,
 	}
 
-	for _, v := range service.Server.MessageHandler.NodeConnections {
+	for _, v := range service.Connections.NodeConnections {
 		v.SendConfirmResult(confirmResult)
 	}
 }

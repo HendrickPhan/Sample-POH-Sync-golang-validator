@@ -23,8 +23,8 @@ type POHRecorder struct {
 }
 
 type POHService struct {
-	mu            sync.Mutex
-	Server        *network.Server
+	mu sync.Mutex
+
 	AccountDB     *leveldb.DB
 	Checkpoint    *pb.POHBlock         // where new tick will start hash
 	Recorder      POHRecorder          //
@@ -42,12 +42,12 @@ type POHService struct {
 	ReceiveVoteChan               chan *pb.POHVote
 	ReceiveVoteResultChan         chan *pb.POHVoteResult
 	ReceiveValidateTickResultChan chan *pb.POHValidateTickResult
+	ReceiveCheckedBlockChan       chan *pb.CheckedBlock
 	LeaderIndexChan               chan int
 
-	ReceiveCheckedBlockChan chan *pb.CheckedBlock
+	NextLeaderTicks []*pb.POHTick
 
-	NextLeaderTicks           []*pb.POHTick
-	ReceiveNextLeaderTickChan <-chan *pb.POHTick
+	Connections *network.Connections
 }
 
 type POHValidTickSigns struct {

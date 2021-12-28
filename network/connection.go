@@ -20,6 +20,12 @@ type Connection struct {
 	mu            sync.Mutex
 }
 
+type Connections struct {
+	ValidatorConnections map[string]*Connection
+	NodeConnections      map[string]*Connection
+	mu                   sync.Mutex
+}
+
 func (conn *Connection) SendMessage(message *pb.Message) error {
 	b, err := proto.Marshal(message)
 	if err != nil {

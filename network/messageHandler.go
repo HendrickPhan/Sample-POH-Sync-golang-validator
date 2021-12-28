@@ -15,24 +15,18 @@ import (
 )
 
 type MessageHandler struct {
-	Ready                 bool
-	InitedConnectionsChan chan *Connection
-	RemoveConnectionChan  chan *Connection
-	ValidatorConnections  map[string]*Connection // map address to validator connection
-	NodeConnections       map[string]*Connection // map address to validator connection
+	Connections *Connections
+	LeaderIndex int
+	Validators  []dataType.Validator // list validator in right order to find leader
+	mu          sync.Mutex
 
-	StartPOHChan chan bool
-	Validators   []dataType.Validator // list validator in right order to find leader
-	LeaderIndex  int
-	mu           sync.Mutex
 	//POH relates
 	ReceiveLeaderTickChan         chan *pb.POHTick
 	ReceiveVoteChan               chan *pb.POHVote
 	ReceiveVoteResultChan         chan *pb.POHVoteResult
-	LeaderIndexChan               chan int
 	ReceiveCheckedBlockChan       chan *pb.CheckedBlock
-	ReceiveNextLeaderTickChan     chan *pb.POHTick
 	ReceiveValidateTickResultChan chan *pb.POHValidateTickResult
+	LeaderIndexChan               chan int
 }
 
 func (handler *MessageHandler) OnConnect(conn *Connection) {
@@ -42,8 +36,7 @@ func (handler *MessageHandler) OnConnect(conn *Connection) {
 
 func (handler *MessageHandler) OnDisconnect(conn *Connection) {
 	log.Infof("Disconnected with server  %s, wallet address: %v \n", conn.TCPConnection.RemoteAddr(), conn.Address)
-	handler.RemoveConnectionChan <- conn
-	// TODO remove from connection list
+	// TODO remove from connections
 
 }
 
@@ -124,37 +117,20 @@ func (handler *MessageHandler) handleInitConnectionMessage(conn *Connection, mes
 	proto.Unmarshal([]byte(message.Body), initConnectionMessage)
 	conn.Address = initConnectionMessage.Address
 	conn.Type = initConnectionMessage.Type
-	handler.mu.Lock()
+
+	handler.Connections.mu.Lock()
 	if conn.Type == "Validator" {
-		// TODO: should have node type in init connection to add connect to right list ex: validator, node, miner
-		handler.ValidatorConnections[conn.Address] = conn
+		handler.Connections.ValidatorConnections[conn.Address] = conn
 	}
 	if conn.Type == "Node" {
-		handler.NodeConnections[conn.Address] = conn
+		handler.Connections.NodeConnections[conn.Address] = conn
 	}
-
-	if len(handler.ValidatorConnections) == len(config.AppConfig.Validators) && len(handler.NodeConnections) > 0 {
-		handler.StartPOHChan <- true
-	}
-
+	handler.Connections.mu.Unlock()
 	log.Infof("Receive InitConnection from %v type %v\n", conn.TCPConnection.RemoteAddr(), conn.Type)
-
-	handler.InitedConnectionsChan <- conn
-
-	handler.mu.Unlock()
-}
-
-func (handler *MessageHandler) getNextLeaderIdx() int {
-	nextLeaderIdx := handler.LeaderIndex + 1
-	if nextLeaderIdx > len(handler.Validators)-1 {
-		nextLeaderIdx = 0
-	}
-	return nextLeaderIdx
 }
 
 func (handler *MessageHandler) handleLeaderTick(message *pb.Message) {
-	// forward tick to childs to validate
-	for _, v := range handler.NodeConnections {
+	for _, v := range handler.Connections.NodeConnections {
 		v.SendMessage(message)
 	}
 }
@@ -196,7 +172,7 @@ func (handler *MessageHandler) handleSendCheckedBlock(message *pb.Message) {
 		handler.ReceiveCheckedBlockChan <- checkedBlock
 	} else {
 		// forward checked block to next leader
-		nextLeaderClient := handler.ValidatorConnections[nextLeader.Address]
+		nextLeaderClient := handler.Connections.ValidatorConnections[nextLeader.Address]
 		if nextLeaderClient != nil {
 			nextLeaderClient.SendMessage(message)
 		}

@@ -6,50 +6,46 @@ import (
 	"example_poh.com/network"
 	"example_poh.com/poh"
 	pb "example_poh.com/proto"
+
+	log "github.com/sirupsen/logrus"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
 func runPoh(
-	startPOHChan chan bool,
+	connections *network.Connections,
 	receiveleaderTickChan chan *pb.POHTick,
 	receiveVoteChan chan *pb.POHVote,
 	receiveVoteResult chan *pb.POHVoteResult,
 	leaderIndexChan chan int,
 	receiveCheckedBlockChan chan *pb.CheckedBlock,
-	receiveNextLeaderTickChan chan *pb.POHTick,
 	receiveValidateTickResultChan chan *pb.POHValidateTickResult,
 	checkpoint *pb.POHBlock,
-	server *network.Server,
 	accountDB *leveldb.DB,
 ) {
-	start := <-startPOHChan
-	if start {
-		pohRecorder := poh.POHRecorder{
-			StartBlockCount: 1,
-		}
-
-		pohService := poh.POHService{
-			Server:                        server,
-			AccountDB:                     accountDB,
-			Recorder:                      pohRecorder,
-			Checkpoint:                    checkpoint,
-			HashPerSecond:                 config.AppConfig.HashPerSecond,
-			TickPerSecond:                 config.AppConfig.TickPerSecond,
-			TickPerSlot:                   config.AppConfig.TickPerSlot,
-			TimeOutTicks:                  config.AppConfig.TimeOutTicks,
-			BlockChan:                     make(chan *pb.POHBlock),
-			ReceiveLeaderTickChan:         receiveleaderTickChan,
-			ReceiveVoteChan:               receiveVoteChan,
-			ReceiveVoteResultChan:         receiveVoteResult,
-			LeaderIndexChan:               leaderIndexChan,
-			ReceiveCheckedBlockChan:       receiveCheckedBlockChan,
-			ReceiveNextLeaderTickChan:     receiveNextLeaderTickChan,
-			ReceiveValidateTickResultChan: receiveValidateTickResultChan,
-		}
-		// call this function to sort validator in righ oder
-		pohService.AddValidators(initValidatorList())
-		go pohService.Run()
+	pohRecorder := poh.POHRecorder{
+		StartBlockCount: 1,
 	}
+
+	pohService := poh.POHService{
+		Connections:                   connections,
+		AccountDB:                     accountDB,
+		Recorder:                      pohRecorder,
+		Checkpoint:                    checkpoint,
+		HashPerSecond:                 config.AppConfig.HashPerSecond,
+		TickPerSecond:                 config.AppConfig.TickPerSecond,
+		TickPerSlot:                   config.AppConfig.TickPerSlot,
+		TimeOutTicks:                  config.AppConfig.TimeOutTicks,
+		BlockChan:                     make(chan *pb.POHBlock),
+		ReceiveLeaderTickChan:         receiveleaderTickChan,
+		ReceiveVoteChan:               receiveVoteChan,
+		ReceiveVoteResultChan:         receiveVoteResult,
+		LeaderIndexChan:               leaderIndexChan,
+		ReceiveCheckedBlockChan:       receiveCheckedBlockChan,
+		ReceiveValidateTickResultChan: receiveValidateTickResultChan,
+	}
+	// call this function to sort validator in righ oder
+	pohService.AddValidators(initValidatorList())
+	go pohService.Run()
 }
 
 func initValidatorConnections() []*network.Connection {
@@ -76,51 +72,35 @@ func initValidatorList() []dataType.Validator {
 }
 
 func runServer(
-	startPOHChan chan bool,
+	connections *network.Connections,
 	validatorConnections []*network.Connection,
 	receiveLeaderTickChan chan *pb.POHTick,
 	receiveVoteChan chan *pb.POHVote,
 	receiveVoteResult chan *pb.POHVoteResult,
 	leaderIndexChan chan int,
 	receiveCheckedBlockChan chan *pb.CheckedBlock,
-	receiveNextLeaderTickChan chan *pb.POHTick,
 	receiveValidateTickResultChan chan *pb.POHValidateTickResult,
 	checkpoint *pb.POHBlock,
-) *network.Server {
-
-	initedConnectionsChan := make(chan *network.Connection)
-	removeConnectionChan := make(chan *network.Connection)
+) {
 
 	handler := network.MessageHandler{
-		InitedConnectionsChan:         initedConnectionsChan,
-		RemoveConnectionChan:          removeConnectionChan,
-		StartPOHChan:                  startPOHChan,
+		Connections:                   connections,
 		ReceiveLeaderTickChan:         receiveLeaderTickChan,
 		ReceiveVoteChan:               receiveVoteChan,
 		ReceiveVoteResultChan:         receiveVoteResult,
 		LeaderIndexChan:               leaderIndexChan,
 		ReceiveCheckedBlockChan:       receiveCheckedBlockChan,
-		ReceiveNextLeaderTickChan:     receiveNextLeaderTickChan,
 		ReceiveValidateTickResultChan: receiveValidateTickResultChan,
-		ValidatorConnections:          make(map[string]*network.Connection),
-		NodeConnections:               make(map[string]*network.Connection),
 	}
 	handler.AddValidators(initValidatorList())
 	handler.LeaderIndex = int((checkpoint.Count + 1) % int64(len(handler.Validators))) // last block count is 1
 	server := network.Server{
-		Address:               config.AppConfig.Address,
-		IP:                    config.AppConfig.Ip,
-		Port:                  config.AppConfig.Port,
-		MessageHandler:        &handler,
-		InitedConnections:     make(map[string]*network.Connection),
-		InitedConnectionsChan: initedConnectionsChan,
-		RemoveConnectionChan:  removeConnectionChan,
-
-		ValidatorConnections: make(map[string]*network.Connection),
-		NodeConnections:      make(map[string]*network.Connection),
+		Address:        config.AppConfig.Address,
+		IP:             config.AppConfig.Ip,
+		Port:           config.AppConfig.Port,
+		MessageHandler: &handler,
 	}
 	go server.Run(validatorConnections)
-	return &server
 }
 
 func main() {
@@ -130,10 +110,13 @@ func main() {
 	receiveVoteResult := make(chan *pb.POHVoteResult)
 	leaderIndexChan := make(chan int)
 	receiveCheckedBlockChan := make(chan *pb.CheckedBlock)
-	receiveNextLeaderTickChan := make(chan *pb.POHTick)
 	receiveValidateTickResultChan := make(chan *pb.POHValidateTickResult)
-	startPOHChan := make(chan bool)
 	validatorConnections := initValidatorConnections()
+
+	connections := &network.Connections{
+		NodeConnections:      make(map[string]*network.Connection),
+		ValidatorConnections: make(map[string]*network.Connection),
+	}
 
 	lastHash := &pb.POHHash{
 		Count:    1,
@@ -159,30 +142,35 @@ func main() {
 	}
 	defer accountDB.Close()
 
-	server := runServer(
-		startPOHChan,
+	go runServer(
+		connections,
 		validatorConnections,
 		receiveLeaderTickChan,
 		receiveVoteChan,
 		receiveVoteResult,
 		leaderIndexChan,
 		receiveCheckedBlockChan,
-		receiveNextLeaderTickChan,
 		receiveValidateTickResultChan,
 		checkpoint,
 	)
-	go runPoh(
-		startPOHChan,
-		receiveLeaderTickChan,
-		receiveVoteChan,
-		receiveVoteResult,
-		leaderIndexChan,
-		receiveCheckedBlockChan,
-		receiveNextLeaderTickChan,
-		receiveValidateTickResultChan,
-		checkpoint,
-		server,
-		accountDB,
-	)
+
+	for {
+		if len(connections.ValidatorConnections) == len(config.AppConfig.Validators) && len(connections.NodeConnections) > 0 {
+			log.Infof("RUN POH\n")
+			go runPoh(
+				connections,
+				receiveLeaderTickChan,
+				receiveVoteChan,
+				receiveVoteResult,
+				leaderIndexChan,
+				receiveCheckedBlockChan,
+				receiveValidateTickResultChan,
+				checkpoint,
+				accountDB,
+			)
+			break
+		}
+	}
+
 	<-finish
 }
