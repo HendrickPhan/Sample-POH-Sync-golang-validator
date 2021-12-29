@@ -17,7 +17,7 @@ func GenerateGenesisBlock(genesisBlockInfo config.GenesisBlockInfo) *pb.POHBlock
 		Link:    "",
 		Sign:    "",
 	}
-	genesisTransaction.Hash = GetTransactionHash(genesisTransaction)
+	GetTransactionHash(genesisTransaction)
 
 	lastHash := &pb.POHHash{
 		Count:        1,

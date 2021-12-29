@@ -19,5 +19,6 @@ func GetTransactionHash(transaction *pb.Transaction) string {
 	}
 	b, _ := proto.Marshal(hashData)
 	hash := crypto.Keccak256(b)
-	return hex.EncodeToString(hash)
+	transaction.Hash = hex.EncodeToString(hash)
+	return transaction.Hash
 }
