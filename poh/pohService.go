@@ -424,8 +424,8 @@ func (service *POHService) extractAccountLastHashFromBlock(block *pb.POHBlock) [
 	for _, tick := range block.Ticks {
 		for _, hash := range tick.Hashes {
 			for _, transaction := range hash.Transactions {
-				accountDataMap[transaction.From] = &pb.AccountData{
-					Address:  transaction.From,
+				accountDataMap[transaction.Address] = &pb.AccountData{
+					Address:  transaction.Address,
 					LastHash: transaction.Hash,
 				}
 			}

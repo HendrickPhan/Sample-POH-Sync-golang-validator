@@ -2,6 +2,7 @@ package main
 
 import (
 	"example_poh.com/config"
+	"example_poh.com/controllers"
 	"example_poh.com/dataType"
 	"example_poh.com/network"
 	"example_poh.com/poh"
@@ -71,6 +72,17 @@ func initValidatorList() []dataType.Validator {
 	return validators
 }
 
+func initCheckPoinBlock() *pb.POHBlock {
+	haveCheckPoint := false //TODO
+	var checkPoinBlock *pb.POHBlock
+	if haveCheckPoint {
+		// load first block from check point
+	} else {
+		checkPoinBlock = controllers.GenerateGenesisBlock(config.AppConfig.GenesisBlockInfo)
+	}
+	return checkPoinBlock
+}
+
 func runServer(
 	connections *network.Connections,
 	validatorConnections []*network.Connection,
@@ -118,22 +130,7 @@ func main() {
 		ValidatorConnections: make(map[string]*network.Connection),
 	}
 
-	lastHash := &pb.POHHash{
-		Count:    1,
-		LastHash: "",
-		Hash:     "INIT_HASH",
-	}
-	lastTick := &pb.POHTick{
-		Hashes: []*pb.POHHash{lastHash},
-		Count:  1,
-	}
-
-	checkpoint := &pb.POHBlock{
-		Ticks: []*pb.POHTick{lastTick},
-		Count: 1,
-		Type:  "leader",
-		Hash:  lastHash,
-	}
+	checkpointBlock := initCheckPoinBlock()
 
 	// db
 	accountDB, err := leveldb.OpenFile(config.AppConfig.AccountDBPath, nil)
@@ -151,7 +148,7 @@ func main() {
 		leaderIndexChan,
 		receiveCheckedBlockChan,
 		receiveValidateTickResultChan,
-		checkpoint,
+		checkpointBlock,
 	)
 
 	for {
@@ -165,7 +162,7 @@ func main() {
 				leaderIndexChan,
 				receiveCheckedBlockChan,
 				receiveValidateTickResultChan,
-				checkpoint,
+				checkpointBlock,
 				accountDB,
 			)
 			break

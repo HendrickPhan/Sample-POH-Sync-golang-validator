@@ -32,5 +32,10 @@
         }
     ],
     "number_of_validate_poh_routine": 10,
-    "account_db_path": "./db/account"
+    "account_db_path": "./db/account",
+    "genesis_block_info": {
+        "init_address": "0x5e65ce8502fb2a85f061b3fd8256d61cc8c9d440",
+        "init_pubkey": "0x5e65ce8502fb2a85f061b3fd8256d61cc8c9d440",
+        "init_balance": 1000000000
+    }
 }

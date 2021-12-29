@@ -8,6 +8,12 @@ import (
 	"example_poh.com/dataType"
 )
 
+type GenesisBlockInfo struct {
+	InitAddress string  `json:"init_address"`
+	InitPubkey  string  `json:"init_pubkey"`
+	InitBalance float64 `json:"init_balance"`
+}
+
 type Config struct {
 	Address                    string               `json:"address"`
 	Ip                         string               `json:"ip"`
@@ -22,6 +28,7 @@ type Config struct {
 	TransactionPerHash         int                  `json:"transaction_per_hash"`
 	NumberOfValidatePohRoutine int                  `json:"number_of_validate_poh_routine"`
 	AccountDBPath              string               `json:"account_db_path"`
+	GenesisBlockInfo           GenesisBlockInfo     `json:"genesis_block_info"`
 }
 
 func loadConfig() Config {

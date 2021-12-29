@@ -3,10 +3,21 @@ package transaction;
 option go_package = "/proto";
 
 message Transaction {
-    string Hash = 1;
-    string LastHash = 2;
-    string From = 3;
-    string To = 4;
-    int64  Balance = 5;
-    string Sign = 6;
+    string Hash = 1;  // hash của transaction này
+    string Address = 2; // địa chỉ của account tạo transaction 
+    string Pubkey = 3; // pubkey của account tạo transaction
+    string Data = 4; // chưa data liên quan đến transaction, nếu là send thì là data để gọi smart contract, nếu là receive thì là data của send transaction (data này được được protobuf marshal thành string)
+    Transaction PreviousData = 5; // transaction trước đó của account tạo ra transaction này (trong này có hash rôi nên mình ko cần thêm field lasthash nữa, trong thông tin previous data  của previous data có thể để null hoặc chỉ cần có hash)
+    double Balance = 6;  // số dư sau khi transaction này đươcj thực hiện
+    string Link = 7;  // field này có 2 chức năng, nếu là transaction send thì là address của user nhận, nếu là reeceive thì là hash của transaction send
+    string Sign = 8; // chữ ký bls được ký bằng private key của account tạo account trên hash của transaction
+}
+
+message HashData {
+    string Address = 1; // địa chỉ của account tạo transaction 
+    string Pubkey = 2; // pubkey của account tạo transaction
+    string Data = 3; // chưa data liên quan đến transaction, nếu là send thì là data để gọi smart contract, nếu là receive thì là data của send transaction (data này được được protobuf marshal thành string)
+    string PreviousHash = 4; // hash cuar transaction trước đó
+    double  Balance = 5;  // số dư sau khi transaction này đươcj thực hiện
+    string Link = 6;  // field này có 2 chức năng, nếu là transaction send thì là address của user nhận, nếu là reeceive thì là hash của transaction send
 }

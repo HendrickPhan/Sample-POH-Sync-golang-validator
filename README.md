@@ -11,6 +11,12 @@ Must run in this sequence to make node work correctly:
 # Build proto  
 `protoc --go_out=. ./proto/*.proto`  
 
+# A Key pair
+```
+Seckey: 4aac41b5cb665b93e031faa751944b1f14d77cb17322403cba8df1d6e4541a4d
+Pubkey: 841c5235ec7f4eed02b3f3bb60622d3ed0aba74016f4850c6d7c962656a4b78d72a15caeef62dfe656d03990590c0026
+Address: 0x5e65ce8502fb2a85f061b3fd8256d61cc8c9d440
+```
 
 # TODO
 - sync data before run POH
