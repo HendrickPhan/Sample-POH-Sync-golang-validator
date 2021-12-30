@@ -12,3 +12,13 @@ func GetTotalTransaction(block *pb.POHBlock) int {
 
 	return totalTransaction
 }
+
+func GetTransactions(block *pb.POHBlock) []*pb.Transaction {
+	transactions := []*pb.Transaction{}
+	for _, tick := range block.Ticks {
+		for _, hash := range tick.Hashes {
+			transactions = append(transactions, hash.Transactions...)
+		}
+	}
+	return transactions
+}

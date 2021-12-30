@@ -10,12 +10,13 @@ import (
 
 func GetTransactionHash(transaction *pb.Transaction) string {
 	hashData := &pb.HashData{
-		Address:      transaction.Address,
+		FromAddress:  transaction.FromAddress,
+		ToAddress:    transaction.ToAddress,
 		Pubkey:       transaction.Pubkey,
 		Data:         transaction.Data,
 		PreviousHash: transaction.PreviousData.Hash,
+		PendingUse:   transaction.PendingUse,
 		Balance:      transaction.Balance,
-		Link:         transaction.Link,
 	}
 	b, _ := proto.Marshal(hashData)
 	hash := crypto.Keccak256(b)
