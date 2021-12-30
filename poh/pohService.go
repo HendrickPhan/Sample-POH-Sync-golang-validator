@@ -35,16 +35,12 @@ func (service *POHService) Run() {
 		transactions := GetTransactions(lastBlock)
 		newAccountDatas := service.GetNewAccountDatas(transactions)
 		service.UpdateAccountDB(newAccountDatas)
-		service.BroadCastConfirmResultToChildrens(transactions, lastBlock.Ticks[len(lastBlock.Ticks)-1])
+		service.BroadCastConfirmResultToChildrens(transactions, newAccountDatas, lastBlock.Ticks[len(lastBlock.Ticks)-1])
+		// clear checking last hashes cuz all has been updated
+		service.CheckingLastHashes = make(map[string]string)
 
 		// send leader index to this chan so message handler know what to do with incomming transactions
 		service.LeaderIndexChan <- service.getCurrentLeaderIdx(lastBlock)
-
-		// genesis account info
-		accountData := &pb.AccountData{}
-		b, _ := service.AccountDB.Get([]byte("0x5e65ce8502fb2a85f061b3fd8256d61cc8c9d440"), nil)
-		proto.Unmarshal(b, accountData)
-		log.Infof("Genesis account data %v, %v, %v, %v\n", accountData.Address, accountData.Balance, accountData.PendingBalance, accountData.LastHash)
 
 		// add to recorder to update poh block history
 		fmt.Printf("Last block count: %v, type: %v\n", lastBlock.Count, lastBlock.Type)
@@ -176,7 +172,6 @@ func (service *POHService) broadCastLeaderTick(tick *pb.POHTick) {
 }
 
 func (service *POHService) CreateTick(lastTick *pb.POHTick, takeTransaction bool) *pb.POHTick {
-
 	hashPerTick := service.HashPerSecond / service.TickPerSecond
 	totalHashGenerated := 0
 	lastHash := lastTick.Hashes[len(lastTick.Hashes)-1]
@@ -184,8 +179,8 @@ func (service *POHService) CreateTick(lastTick *pb.POHTick, takeTransaction bool
 	for totalHashGenerated < hashPerTick {
 		var transactions []*pb.Transaction
 		if takeTransaction {
-			// TODO: take transaction from recorder
 			transactions = service.Recorder.TakeTransactions(config.AppConfig.TransactionPerHash)
+			transactions = service.validateTransactionLastHashes(transactions)
 		}
 		hash := service.generatePOHHash(transactions, lastHash)
 		hashes = append(hashes, hash)
@@ -197,6 +192,27 @@ func (service *POHService) CreateTick(lastTick *pb.POHTick, takeTransaction bool
 		Count:  lastTick.Count + 1,
 	}
 	return tick
+}
+
+func (service *POHService) validateTransactionLastHashes(transactions []*pb.Transaction) []*pb.Transaction {
+	var validatedTransactions []*pb.Transaction
+	for _, transaction := range transactions {
+		if _, ok := service.CheckingLastHashes[transaction.FromAddress]; !ok {
+			bAccountData, err := service.AccountDB.Get([]byte(transaction.FromAddress), nil)
+			if err != nil {
+				log.Warn("Account have no data but create send transaction. Address: %v")
+				continue
+			}
+			accountData := &pb.AccountData{}
+			proto.Unmarshal(bAccountData, accountData)
+
+			service.CheckingLastHashes[transaction.FromAddress] = accountData.LastHash
+		}
+		if transaction.PreviousData.Hash == service.CheckingLastHashes[transaction.FromAddress] {
+			validatedTransactions = append(validatedTransactions, transaction)
+		}
+	}
+	return validatedTransactions
 }
 
 func (service *POHService) createLeaderBlockWithSelfGenLastTick(lastBlock *pb.POHBlock, ticks []*pb.POHTick) *pb.POHBlock {
@@ -454,8 +470,6 @@ func (service *POHService) GetNewAccountDatas(transactions []*pb.Transaction) ma
 			newAccountData[transaction.ToAddress] = accountData
 		}
 		newAccountData[transaction.ToAddress].PendingBalance += sendAmount
-		fmt.Printf("address %v, pending %v, lasthash %v, balance %v", newAccountData[transaction.ToAddress].Address, newAccountData[transaction.ToAddress].PendingBalance, newAccountData[transaction.ToAddress].LastHash, newAccountData[transaction.ToAddress].Balance)
-		panic("")
 	}
 	return newAccountData
 }
@@ -472,10 +486,11 @@ func (service *POHService) UpdateAccountDB(newAccountDatas map[string]*pb.Accoun
 	}
 }
 
-func (service *POHService) BroadCastConfirmResultToChildrens(transactions []*pb.Transaction, lastTick *pb.POHTick) {
+func (service *POHService) BroadCastConfirmResultToChildrens(transactions []*pb.Transaction, newAccountDatas map[string]*pb.AccountData, lastTick *pb.POHTick) {
 	// extract last hash of account in block
 	confirmResult := &pb.POHConfirmResult{
 		LastTick:     lastTick,
+		AccountDatas: newAccountDatas,
 		Transactions: transactions,
 	}
 

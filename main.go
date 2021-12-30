@@ -36,6 +36,7 @@ func runPoh(
 		TickPerSecond:                 config.AppConfig.TickPerSecond,
 		TickPerSlot:                   config.AppConfig.TickPerSlot,
 		TimeOutTicks:                  config.AppConfig.TimeOutTicks,
+		CheckingLastHashes:            make(map[string]string),
 		BlockChan:                     make(chan *pb.POHBlock),
 		ReceiveLeaderTickChan:         receiveleaderTickChan,
 		ReceiveVoteChan:               receiveVoteChan,
