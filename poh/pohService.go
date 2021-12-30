@@ -14,6 +14,7 @@ import (
 	pb "example_poh.com/proto"
 	log "github.com/sirupsen/logrus"
 	"github.com/syndtr/goleveldb/leveldb"
+	"google.golang.org/protobuf/proto"
 )
 
 func (service *POHService) Run() {
@@ -31,9 +32,12 @@ func (service *POHService) Run() {
 
 	for {
 		lastBlock := <-service.BlockChan
-		accountDatas := service.extractAccountLastHashFromBlock(lastBlock)
-		service.UpdateAccountDB(accountDatas)
-		service.BroadCastConfirmResultToChildrens(accountDatas, lastBlock.Ticks[len(lastBlock.Ticks)-1], "TODO")
+		transactions := GetTransactions(lastBlock)
+		newAccountDatas := service.GetNewAccountDatas(transactions)
+		service.UpdateAccountDB(newAccountDatas)
+		service.BroadCastConfirmResultToChildrens(transactions, newAccountDatas, lastBlock.Ticks[len(lastBlock.Ticks)-1])
+		// clear checking last hashes cuz all has been updated
+		service.CheckingLastHashes = make(map[string]string)
 
 		// send leader index to this chan so message handler know what to do with incomming transactions
 		service.LeaderIndexChan <- service.getCurrentLeaderIdx(lastBlock)
@@ -168,7 +172,6 @@ func (service *POHService) broadCastLeaderTick(tick *pb.POHTick) {
 }
 
 func (service *POHService) CreateTick(lastTick *pb.POHTick, takeTransaction bool) *pb.POHTick {
-
 	hashPerTick := service.HashPerSecond / service.TickPerSecond
 	totalHashGenerated := 0
 	lastHash := lastTick.Hashes[len(lastTick.Hashes)-1]
@@ -176,8 +179,8 @@ func (service *POHService) CreateTick(lastTick *pb.POHTick, takeTransaction bool
 	for totalHashGenerated < hashPerTick {
 		var transactions []*pb.Transaction
 		if takeTransaction {
-			// TODO: take transaction from recorder
 			transactions = service.Recorder.TakeTransactions(config.AppConfig.TransactionPerHash)
+			transactions = service.validateTransactionLastHashes(transactions)
 		}
 		hash := service.generatePOHHash(transactions, lastHash)
 		hashes = append(hashes, hash)
@@ -189,6 +192,27 @@ func (service *POHService) CreateTick(lastTick *pb.POHTick, takeTransaction bool
 		Count:  lastTick.Count + 1,
 	}
 	return tick
+}
+
+func (service *POHService) validateTransactionLastHashes(transactions []*pb.Transaction) []*pb.Transaction {
+	var validatedTransactions []*pb.Transaction
+	for _, transaction := range transactions {
+		if _, ok := service.CheckingLastHashes[transaction.FromAddress]; !ok {
+			bAccountData, err := service.AccountDB.Get([]byte(transaction.FromAddress), nil)
+			if err != nil {
+				log.Warn("Account have no data but create send transaction. Address: %v")
+				continue
+			}
+			accountData := &pb.AccountData{}
+			proto.Unmarshal(bAccountData, accountData)
+
+			service.CheckingLastHashes[transaction.FromAddress] = accountData.LastHash
+		}
+		if transaction.PreviousData.Hash == service.CheckingLastHashes[transaction.FromAddress] {
+			validatedTransactions = append(validatedTransactions, transaction)
+		}
+	}
+	return validatedTransactions
 }
 
 func (service *POHService) createLeaderBlockWithSelfGenLastTick(lastBlock *pb.POHBlock, ticks []*pb.POHTick) *pb.POHBlock {
@@ -418,29 +442,43 @@ func (service *POHService) HandleValidateTickResultFromChildrenNode(lastBlock *p
 	go service.HandleVoteResult(voteBlock, leaderBlockChan, exitChan)
 }
 
-func (service *POHService) extractAccountLastHashFromBlock(block *pb.POHBlock) []*pb.AccountData {
-	var rs []*pb.AccountData
-	accountDataMap := make(map[string]*pb.AccountData)
-	for _, tick := range block.Ticks {
-		for _, hash := range tick.Hashes {
-			for _, transaction := range hash.Transactions {
-				accountDataMap[transaction.Address] = &pb.AccountData{
-					Address:  transaction.Address,
-					LastHash: transaction.Hash,
-				}
-			}
+func (service *POHService) GetNewAccountDatas(transactions []*pb.Transaction) map[string]*pb.AccountData {
+	newAccountData := make(map[string]*pb.AccountData)
+
+	for _, transaction := range transactions {
+		sendAmount := transaction.PreviousData.Balance + transaction.PendingUse - transaction.Balance
+		// update pending balance of sender
+		if _, ok := newAccountData[transaction.FromAddress]; !ok {
+			bAccountData, _ := service.AccountDB.Get([]byte(transaction.FromAddress), nil)
+			accountData := &pb.AccountData{}
+			proto.Unmarshal(bAccountData, accountData)
+			newAccountData[transaction.FromAddress] = accountData
 		}
+		newAccountData[transaction.FromAddress].PendingBalance -= transaction.PendingUse
+		newAccountData[transaction.FromAddress].Balance -= transaction.Balance
+		newAccountData[transaction.FromAddress].LastHash = transaction.Hash
+
+		// update pending balance of receiver
+		if _, ok := newAccountData[transaction.ToAddress]; !ok {
+			bAccountData, err := service.AccountDB.Get([]byte(transaction.ToAddress), nil)
+			accountData := &pb.AccountData{}
+			if err != nil {
+				accountData.Address = transaction.ToAddress
+			} else {
+				proto.Unmarshal(bAccountData, accountData)
+			}
+			newAccountData[transaction.ToAddress] = accountData
+		}
+		newAccountData[transaction.ToAddress].PendingBalance += sendAmount
 	}
-	for _, v := range accountDataMap {
-		rs = append(rs, v)
-	}
-	return rs
+	return newAccountData
 }
 
-func (service *POHService) UpdateAccountDB(accountDatas []*pb.AccountData) {
+func (service *POHService) UpdateAccountDB(newAccountDatas map[string]*pb.AccountData) {
 	batch := new(leveldb.Batch)
-	for _, v := range accountDatas {
-		batch.Put([]byte(v.Address), []byte(v.LastHash))
+	for _, v := range newAccountDatas {
+		b, _ := proto.Marshal(v)
+		batch.Put([]byte(v.Address), b)
 	}
 	err := service.AccountDB.Write(batch, nil)
 	if err != nil {
@@ -448,12 +486,12 @@ func (service *POHService) UpdateAccountDB(accountDatas []*pb.AccountData) {
 	}
 }
 
-func (service *POHService) BroadCastConfirmResultToChildrens(accountDatas []*pb.AccountData, lastTick *pb.POHTick, merkelRoot string) {
+func (service *POHService) BroadCastConfirmResultToChildrens(transactions []*pb.Transaction, newAccountDatas map[string]*pb.AccountData, lastTick *pb.POHTick) {
 	// extract last hash of account in block
 	confirmResult := &pb.POHConfirmResult{
 		LastTick:     lastTick,
-		MerkelRoot:   merkelRoot,
-		AccountDatas: accountDatas,
+		AccountDatas: newAccountDatas,
+		Transactions: transactions,
 	}
 
 	for _, v := range service.Connections.NodeConnections {

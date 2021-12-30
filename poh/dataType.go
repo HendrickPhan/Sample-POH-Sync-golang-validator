@@ -25,17 +25,18 @@ type POHRecorder struct {
 type POHService struct {
 	mu sync.Mutex
 
-	AccountDB     *leveldb.DB
-	Checkpoint    *pb.POHBlock         // where new tick will start hash
-	Recorder      POHRecorder          //
-	Validators    []dataType.Validator // list validator to communicate, choose leader
-	LeaderIndex   int                  // idx of leader in Validators
-	HashPerSecond int                  //
-	TickPerSecond int                  //
-	TickPerSlot   int                  // these 3 variable use to sync hashrate between validators
-	TimeOutTicks  int
-	TickStart     int64 //
-	TickEnd       int64 // use to throttle tick speed
+	AccountDB          *leveldb.DB
+	Checkpoint         *pb.POHBlock         // where new tick will start hash
+	Recorder           POHRecorder          //
+	Validators         []dataType.Validator // list validator to communicate, choose leader
+	LeaderIndex        int                  // idx of leader in Validators
+	HashPerSecond      int                  //
+	TickPerSecond      int                  //
+	TickPerSlot        int                  // these 3 variable use to sync hashrate between validators
+	TimeOutTicks       int
+	TickStart          int64 //
+	TickEnd            int64 // use to throttle tick speed
+	CheckingLastHashes map[string]string
 
 	BlockChan                     chan *pb.POHBlock
 	ReceiveLeaderTickChan         chan *pb.POHTick

@@ -48,6 +48,6 @@ message POHValidateTickResult {
 
 message POHConfirmResult {
 	POHTick LastTick = 1;
-    repeated accountData.AccountData AccountDatas = 2;
-    string MerkelRoot = 3;
+    map<string, accountData.AccountData> AccountDatas = 2;
+    repeated  transaction.Transaction  Transactions = 3;
 }

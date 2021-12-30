@@ -7,14 +7,15 @@ import (
 
 func GenerateGenesisBlock(genesisBlockInfo config.GenesisBlockInfo) *pb.POHBlock {
 	genesisTransaction := &pb.Transaction{
-		Address: genesisBlockInfo.InitAddress,
-		Pubkey:  genesisBlockInfo.InitPubkey,
-		Data:    "",
+		FromAddress: "",
+		ToAddress:   genesisBlockInfo.InitAddress,
+		Pubkey:      genesisBlockInfo.InitPubkey,
+		Data:        "",
 		PreviousData: &pb.Transaction{
-			Hash: "GENESIS_HASH",
+			Hash:    "GENESIS_HASH",
+			Balance: genesisBlockInfo.InitBalance,
 		},
-		Balance: genesisBlockInfo.InitBalance,
-		Link:    "",
+		Balance: 0,
 		Sign:    "",
 	}
 	GetTransactionHash(genesisTransaction)
