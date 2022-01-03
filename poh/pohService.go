@@ -455,7 +455,7 @@ func (service *POHService) GetNewAccountDatas(transactions []*pb.Transaction) ma
 			newAccountData[transaction.FromAddress] = accountData
 		}
 		newAccountData[transaction.FromAddress].PendingBalance -= transaction.PendingUse
-		newAccountData[transaction.FromAddress].Balance -= transaction.Balance
+		newAccountData[transaction.FromAddress].Balance = transaction.Balance
 		newAccountData[transaction.FromAddress].LastHash = transaction.Hash
 
 		// update pending balance of receiver

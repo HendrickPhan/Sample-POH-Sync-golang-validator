@@ -30,3 +30,13 @@ Address: 0x5e65ce8502fb2a85f061b3fd8256d61cc8c9d440
         [{Address: lasthash}, ...]
 
 
+## task smart contract:
++ deploy smart contract
++ execute transaction
++ save pending smart contract execute
++ miner execute smart contract
++ update smart contract data after executed
++ save data to cloud
++ send data back to client
++ call smart contract function
++ get receipt from smart contract
